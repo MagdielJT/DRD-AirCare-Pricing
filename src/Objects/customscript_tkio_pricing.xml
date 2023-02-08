@@ -1,0 +1,31 @@
+<suitelet scriptid="customscript_tkio_pricing">
+  <description>Script encargado de la pantalla de Pricing</description>
+  <isinactive>F</isinactive>
+  <name>Suitelet Pricing</name>
+  <notifyadmins>F</notifyadmins>
+  <notifyemails></notifyemails>
+  <notifyowner>T</notifyowner>
+  <notifyuser>F</notifyuser>
+  <scriptfile>[/SuiteScripts/AirCarePricing/tkio_pricing_sl.js]</scriptfile>
+  <scriptdeployments>
+    <scriptdeployment scriptid="customdeploy_tkio_pricing">
+      <allemployees>F</allemployees>
+      <allpartners>F</allpartners>
+      <allroles>F</allroles>
+      <audslctrole>ADMINISTRATOR</audslctrole>
+      <eventtype></eventtype>
+      <isdeployed>T</isdeployed>
+      <isonline>F</isonline>
+      <loglevel>DEBUG</loglevel>
+      <runasrole>ADMINISTRATOR</runasrole>
+      <status>RELEASED</status>
+      <title>Suitelet Pricing</title>
+      <links>
+        <link>
+          <linkcategory>BASICTRANSACTIONSINVENTORY</linkcategory>
+          <linklabel>Precios</linklabel>
+        </link>
+      </links>
+    </scriptdeployment>
+  </scriptdeployments>
+</suitelet>

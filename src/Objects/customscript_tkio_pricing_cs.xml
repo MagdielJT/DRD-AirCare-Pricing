@@ -1,0 +1,10 @@
+<clientscript scriptid="customscript_tkio_pricing_cs">
+  <description>Script que detectará las acciones en pantalla</description>
+  <isinactive>F</isinactive>
+  <name>TKIO - Pricing - CS</name>
+  <notifyadmins>F</notifyadmins>
+  <notifyemails></notifyemails>
+  <notifyowner>T</notifyowner>
+  <notifyuser>F</notifyuser>
+  <scriptfile>[/SuiteScripts/AirCarePricing/tkio_pricing_cs.js]</scriptfile>
+</clientscript>

@@ -1,0 +1,25 @@
+<suitelet scriptid="customscript_tkio_pricing_servicio_sl">
+  <description>Script encargado de realizar el back-end de la pantalla</description>
+  <isinactive>F</isinactive>
+  <name>TKIO - Suitelet Pricing Servicio</name>
+  <notifyadmins>F</notifyadmins>
+  <notifyemails></notifyemails>
+  <notifyowner>T</notifyowner>
+  <notifyuser>F</notifyuser>
+  <scriptfile>[/SuiteScripts/AirCarePricing/tkio_pricing_service_sl.js]</scriptfile>
+  <scriptdeployments>
+    <scriptdeployment scriptid="customdeploy_tkio_pricing_servicio_sl">
+      <allemployees>F</allemployees>
+      <allpartners>F</allpartners>
+      <allroles>F</allroles>
+      <audslctrole>ADMINISTRATOR</audslctrole>
+      <eventtype></eventtype>
+      <isdeployed>T</isdeployed>
+      <isonline>F</isonline>
+      <loglevel>AUDIT</loglevel>
+      <runasrole></runasrole>
+      <status>RELEASED</status>
+      <title>TKIO - Suitelet Pricing Servicio</title>
+    </scriptdeployment>
+  </scriptdeployments>
+</suitelet>
