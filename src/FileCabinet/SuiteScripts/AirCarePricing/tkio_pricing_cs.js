@@ -347,7 +347,7 @@ define(['N/url', 'N/currentRecord', 'N/ui/message', 'N/format', 'N/https', 'N/re
                         });
                         console.log('bodyAux: ', JSON.stringify(bodyAux));
                         var response = https.post({ url: out, body: JSON.stringify(bodyAux) });
-                        
+
                         //Se obtienen los datos y se genera el archivo csv
                         var respuesta = response.body;
                         window.open(respuesta, "_blank")
@@ -551,12 +551,12 @@ define(['N/url', 'N/currentRecord', 'N/ui/message', 'N/format', 'N/https', 'N/re
                     var check = currentForm.getSublistValue({ sublistId: 'sublist_precios_mxn', fieldId: 'sublist_valid_incrementar_mxn', line: i });
                     var id = currentForm.getSublistValue({ sublistId: 'sublist_precios_mxn', fieldId: 'sublist_id_internal_item_mxn', line: i });
                     var itemCode = currentForm.getSublistValue({ sublistId: 'sublist_precios_mxn', fieldId: 'sublist_id_item_mxn', line: i });
-                    var listPrice = currentForm.getSublistValue({ sublistId: 'sublist_precios_mxn', fieldId: 'sublist_list_price_mxn', line: i });
+                    var listPrice = currentForm.getSublistValue({ sublistId: 'sublist_precios_mxn', fieldId: 'sublist_list_price_mxn', line: i }).replace('$', '');
                     var listPriceOr = currentForm.getSublistValue({ sublistId: 'sublist_precios_mxn', fieldId: 'sublist_list_price_or_mxn', line: i });
                     var pieces = currentForm.getSublistValue({ sublistId: 'sublist_precios_mxn', fieldId: 'sublist_pieces_mxn', line: i });
-                    var lastCost = currentForm.getSublistValue({ sublistId: 'sublist_precios_mxn', fieldId: 'sublist_last_cost_mxn', line: i });
-                    var saleCost = currentForm.getSublistValue({ sublistId: 'sublist_precios_mxn', fieldId: 'sublist_sale_price_mxn', line: i });
-                    var averageCost = currentForm.getSublistValue({ sublistId: 'sublist_precios_mxn', fieldId: 'sublist_average_cost_mxn', line: i });
+                    var lastCost = currentForm.getSublistValue({ sublistId: 'sublist_precios_mxn', fieldId: 'sublist_last_cost_mxn', line: i }).replace('$', '');
+                    var saleCost = currentForm.getSublistValue({ sublistId: 'sublist_precios_mxn', fieldId: 'sublist_sale_price_mxn', line: i }).replace('$', '');
+                    var averageCost = currentForm.getSublistValue({ sublistId: 'sublist_precios_mxn', fieldId: 'sublist_average_cost_mxn', line: i }).replace('$', '');
                     var theoretical_margin = currentForm.getSublistValue({ sublistId: 'sublist_precios_mxn', fieldId: 'sublist_theoretical_margin_mxn', line: i });
                     var real_margin = currentForm.getSublistValue({ sublistId: 'sublist_precios_mxn', fieldId: 'sublist_real_margin_mxn', line: i });
                     var min_margin = currentForm.getSublistValue({ sublistId: 'sublist_precios_mxn', fieldId: 'sublist_minimum_margin_mxn', line: i });
@@ -574,38 +574,37 @@ define(['N/url', 'N/currentRecord', 'N/ui/message', 'N/format', 'N/https', 'N/re
                             check: check,
                             id: id,
                             itemCode: itemCode,
-                            listPrice: listPrice,
-                            listPriceOr: listPriceOr,
+                            listPrice: Number(listPrice).toFixed(3),
+                            listPriceOr: Number(listPriceOr).toFixed(3),
                             pieces: pieces,
-                            lastCost: lastCost,
-                            saleCost: saleCost,
-                            averageCost: averageCost,
-                            theoretical_margin: theoretical_margin,
-                            real_margin: real_margin,
-                            min_margin: min_margin,
-                            max_margin: max_margin,
-                            inc_suggest: inc_suggest,
+                            lastCost: Number(lastCost).toFixed(3),
+                            saleCost: Number(saleCost).toFixed(3),
+                            averageCost: Number(averageCost).toFixed(3),
+                            theoretical_margin: Number(theoretical_margin).toFixed(3),
+                            real_margin: Number(real_margin).toFixed(3),
+                            min_margin: Number(min_margin).toFixed(3),
+                            max_margin: Number(max_margin).toFixed(3),
+                            inc_suggest: Number(inc_suggest).toFixed(3),
                             currencyItem: currencyItem
                         });
                     } else {
 
                         if (check) {
-
                             arregloItemsMXN.push({
                                 check: check,
                                 id: id,
                                 itemCode: itemCode,
-                                listPrice: parseFloat(listPrice) + (parseFloat(listPriceOr) * parseFloat(inc_suggest)) / 100,
-                                listPriceOr: listPriceOr,
+                                listPrice:Number( parseFloat(listPrice) + (parseFloat(listPriceOr) * parseFloat(inc_suggest)) / 100).toFixed(3),
+                                listPriceOr: Number(listPriceOr).toFixed(3),
                                 pieces: pieces,
-                                lastCost: lastCost,
-                                saleCost: saleCost,
-                                averageCost: averageCost,
-                                theoretical_margin: theoretical_margin,
-                                real_margin: real_margin,
-                                min_margin: min_margin,
-                                max_margin: max_margin,
-                                inc_suggest: inc_suggest,
+                                lastCost: Number(lastCost).toFixed(3),
+                                saleCost: Number(saleCost).toFixed(3),
+                                averageCost: Number(averageCost).toFixed(3),
+                                theoretical_margin: Number(theoretical_margin).toFixed(3),
+                                real_margin: Number(real_margin).toFixed(3),
+                                min_margin: Number(min_margin).toFixed(3),
+                                max_margin: Number(max_margin).toFixed(3),
+                                inc_suggest: Number(inc_suggest).toFixed(3),
                                 currencyItem: currencyItem
                             });
                         }
@@ -617,12 +616,12 @@ define(['N/url', 'N/currentRecord', 'N/ui/message', 'N/format', 'N/https', 'N/re
                     var check = currentForm.getSublistValue({ sublistId: 'sublist_precios_usd', fieldId: 'sublist_valid_incrementar_usd', line: i });
                     var id = currentForm.getSublistValue({ sublistId: 'sublist_precios_usd', fieldId: 'sublist_id_internal_item_usd', line: i });
                     var itemCode = currentForm.getSublistValue({ sublistId: 'sublist_precios_usd', fieldId: 'sublist_id_item_usd', line: i });
-                    var listPrice = currentForm.getSublistValue({ sublistId: 'sublist_precios_usd', fieldId: 'sublist_list_price_usd', line: i });
+                    var listPrice = currentForm.getSublistValue({ sublistId: 'sublist_precios_usd', fieldId: 'sublist_list_price_usd', line: i }).replace('$', '');
                     var listPriceOr = currentForm.getSublistValue({ sublistId: 'sublist_precios_usd', fieldId: 'sublist_list_price_or_usd', line: i });
                     var pieces = currentForm.getSublistValue({ sublistId: 'sublist_precios_usd', fieldId: 'sublist_pieces_usd', line: i });
-                    var lastCost = currentForm.getSublistValue({ sublistId: 'sublist_precios_usd', fieldId: 'sublist_last_cost_usd', line: i });
-                    var saleCost = currentForm.getSublistValue({ sublistId: 'sublist_precios_usd', fieldId: 'sublist_sale_price_usd', line: i });
-                    var averageCost = currentForm.getSublistValue({ sublistId: 'sublist_precios_usd', fieldId: 'sublist_average_cost_usd', line: i });
+                    var lastCost = currentForm.getSublistValue({ sublistId: 'sublist_precios_usd', fieldId: 'sublist_last_cost_usd', line: i }).replace('$', '');
+                    var saleCost = currentForm.getSublistValue({ sublistId: 'sublist_precios_usd', fieldId: 'sublist_sale_price_usd', line: i }).replace('$', '');
+                    var averageCost = currentForm.getSublistValue({ sublistId: 'sublist_precios_usd', fieldId: 'sublist_average_cost_usd', line: i }).replace('$', '');
                     var theoretical_margin = currentForm.getSublistValue({ sublistId: 'sublist_precios_usd', fieldId: 'sublist_theoretical_margin_usd', line: i });
                     var real_margin = currentForm.getSublistValue({ sublistId: 'sublist_precios_usd', fieldId: 'sublist_real_margin_usd', line: i });
                     var min_margin = currentForm.getSublistValue({ sublistId: 'sublist_precios_usd', fieldId: 'sublist_minimum_margin_usd', line: i });
@@ -639,17 +638,17 @@ define(['N/url', 'N/currentRecord', 'N/ui/message', 'N/format', 'N/https', 'N/re
                             check: check,
                             id: id,
                             itemCode: itemCode,
-                            listPrice: listPrice,
-                            listPriceOr: listPriceOr,
+                            listPrice: Number(listPrice).toFixed(3),
+                            listPriceOr: Number(listPriceOr).toFixed(3),
                             pieces: pieces,
-                            lastCost: lastCost,
-                            saleCost: saleCost,
-                            averageCost: averageCost,
-                            theoretical_margin: theoretical_margin,
-                            real_margin: real_margin,
-                            min_margin: min_margin,
-                            max_margin: max_margin,
-                            inc_suggest: inc_suggest,
+                            lastCost: Number(lastCost).toFixed(3),
+                            saleCost: Number(saleCost).toFixed(3),
+                            averageCost: Number(averageCost).toFixed(3),
+                            theoretical_margin: Number(theoretical_margin).toFixed(3),
+                            real_margin: Number(real_margin).toFixed(3),
+                            min_margin: Number(min_margin).toFixed(3),
+                            max_margin: Number(max_margin).toFixed(3),
+                            inc_suggest: Number(inc_suggest).toFixed(3),
                             currencyItem: currencyItem
                         });
                     } else {
@@ -660,17 +659,17 @@ define(['N/url', 'N/currentRecord', 'N/ui/message', 'N/format', 'N/https', 'N/re
                                 check: check,
                                 id: id,
                                 itemCode: itemCode,
-                                listPrice: parseFloat(listPrice) + (parseFloat(listPriceOr) * parseFloat(inc_suggest)) / 100,
-                                listPriceOr: listPriceOr,
+                                listPrice: Number(parseFloat(listPrice) + (parseFloat(listPriceOr) * parseFloat(inc_suggest)) / 100).toFixed(3),
+                                listPriceOr: Number(listPriceOr).toFixed(3),
                                 pieces: pieces,
-                                lastCost: lastCost,
-                                saleCost: saleCost,
-                                averageCost: averageCost,
-                                theoretical_margin: theoretical_margin,
-                                real_margin: real_margin,
-                                min_margin: min_margin,
-                                max_margin: max_margin,
-                                inc_suggest: inc_suggest,
+                                lastCost: Number(lastCost).toFixed(3),
+                                saleCost: Number(saleCost).toFixed(3),
+                                averageCost: Number(averageCost).toFixed(3),
+                                theoretical_margin: Number(theoretical_margin).toFixed(3),
+                                real_margin: Number(real_margin).toFixed(3),
+                                min_margin: Number(min_margin).toFixed(3),
+                                max_margin: Number(max_margin).toFixed(3),
+                                inc_suggest: Number(inc_suggest).toFixed(3),
                                 currencyItem: currencyItem,
                             });
                         }
