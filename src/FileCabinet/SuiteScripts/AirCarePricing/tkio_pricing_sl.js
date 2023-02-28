@@ -383,8 +383,8 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
                             ["type", "anyof", "Assembly"],
                             "AND",
                             ["class", "anyof", clase],
-                            // "AND",
-                            // ["internalid", "anyof", '518'],
+                            "AND",
+                            ["internalid", "anyof", '518'],
                             "AND",
                             ["custitem_tkio_art_subensasmblaje", "is", "F"]
 
@@ -740,6 +740,7 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
                 date = date.setMonth(date.getMonth() - 12)
                 log.debug({ title: 'date:', details: date });
                 var fechaArreglo = moment(date).locale('es-mx').format('DD/MM/YYYY').split('/');
+                //Modificar por el formato de fechas
                 var fechaInicio = "1/1/" + fechaArreglo[2];
                 var fechaFin = "12/31/" + fecha[2];
                 var inventoryadjustmentSearchObj = search.create({
@@ -1194,12 +1195,12 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
                     }
                     sublist2.setSublistValue({ id: 'sublist_id_internal_item_usd', line: j, value: itemsListUSD[j].id });
                     sublist2.setSublistValue({ id: 'sublist_id_item_usd', line: j, value: itemsListUSD[j].itemCode });
-                    sublist2.setSublistValue({ id: 'sublist_list_price_usd', line: j, value: itemsListUSD[j].listPrice });
+                    sublist2.setSublistValue({ id: 'sublist_list_price_usd', line: j, value: '$' + itemsListUSD[j].listPrice });
                     sublist2.setSublistValue({ id: 'sublist_list_price_or_usd', line: j, value: itemsListUSD[j].listPriceOr });
                     sublist2.setSublistValue({ id: 'sublist_pieces_usd', line: j, value: itemsListUSD[j].pieces });
-                    sublist2.setSublistValue({ id: 'sublist_last_cost_usd', line: j, value: itemsListUSD[j].lastCost });
-                    sublist2.setSublistValue({ id: 'sublist_sale_price_usd', line: j, value: itemsListUSD[j].saleCost });
-                    sublist2.setSublistValue({ id: 'sublist_average_cost_usd', line: j, value: itemsListUSD[j].averageCost });
+                    sublist2.setSublistValue({ id: 'sublist_last_cost_usd', line: j, value: '$' + itemsListUSD[j].lastCost });
+                    sublist2.setSublistValue({ id: 'sublist_sale_price_usd', line: j, value: '$' + itemsListUSD[j].saleCost });
+                    sublist2.setSublistValue({ id: 'sublist_average_cost_usd', line: j, value: '$' + itemsListUSD[j].averageCost });
                     sublist2.setSublistValue({ id: 'sublist_minimum_margin_usd', line: j, value: itemsListUSD[j].min_margin });
                     sublist2.setSublistValue({ id: 'sublist_maximum_margin_usd', line: j, value: itemsListUSD[j].max_margin });
                     sublist2.setSublistValue({ id: 'sublist_real_margin_usd', line: j, value: itemsListUSD[j].real_margin });
