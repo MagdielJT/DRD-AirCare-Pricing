@@ -2,7 +2,7 @@
  * @NApiVersion 2.1
  * @NScriptType MapReduceScript
  */
-define(['N/log', 'N/task', 'N/record', 'N/runtime', 'N/search','N/format'],
+define(['N/log', 'N/task', 'N/record', 'N/runtime', 'N/search', 'N/format'],
     /**
  * @param{log} log
  * @param{task} task
@@ -25,19 +25,19 @@ define(['N/log', 'N/task', 'N/record', 'N/runtime', 'N/search','N/format'],
             try {
                 var objScript = runtime.getCurrentScript();
                 var idClase = JSON.parse(objScript.getParameter({ name: "custscript_tkio_filter_id_clase" }));
-                log.audit({title: 'idClase: ', details: idClase});
+                log.audit({ title: 'idClase: ', details: idClase });
 
                 let dataClass = search.lookupFields({ type: "classification", id: idClase, columns: ['custrecord_tkio_max_margen', 'custrecord_tkio_min_margen'] })
-                log.audit({title: 'Datos clase: ', details: dataClass});
+                log.audit({ title: 'Datos clase: ', details: dataClass });
 
                 let arr = [];
                 var assemblyitemSearchObj = search.create({
                     type: "assemblyitem",
                     filters:
                         [
-                            ["type", "anyof", "Assembly"], 
-                            "AND", 
-                            ["class","anyof", idClase]
+                            ["type", "anyof", "Assembly"],
+                            "AND",
+                            ["class", "anyof", idClase]
                         ],
                     columns:
                         [
@@ -50,9 +50,9 @@ define(['N/log', 'N/task', 'N/record', 'N/runtime', 'N/search','N/format'],
                 log.debug("assemblyitemSearchObj result count", searchResultCount);
                 assemblyitemSearchObj.run().each(function (result) {
                     arr.push({
-                         id: result.getValue({ name: "internalid"}),
-                         maxMargen : dataClass.custrecord_tkio_max_margen,
-                         minMargen: dataClass.custrecord_tkio_min_margen
+                        id: result.getValue({ name: "internalid" }),
+                        maxMargen: dataClass.custrecord_tkio_max_margen,
+                        minMargen: dataClass.custrecord_tkio_min_margen
                     })
                     return true;
                 });
@@ -109,10 +109,10 @@ define(['N/log', 'N/task', 'N/record', 'N/runtime', 'N/search','N/format'],
             try {
                 let data = JSON.parse(reduceContext.values[0]);
                 log.debug({ title: 'Datos obtenidos del UserEvent: ', details: data });
-                
+
                 var objRecord = record.load({ type: 'assemblyitem', id: data.id });
-                let min_margin = format.parse({ value: data.minMargen, type: format.Type.PERCENT });
-                let max_margin = format.parse({ value: data.maxMargen, type: format.Type.PERCENT });
+                let min_margin = format.parse({ value: (data.minMargen !== '' ? data.minMargen : '0%'), type: format.Type.PERCENT });
+                let max_margin = format.parse({ value: (data.maxMargen !== '' ? data.maxMargen : '0%'), type: format.Type.PERCENT });
                 objRecord.setValue({ fieldId: 'custitem_tkio_max_margen_art', value: max_margin });
                 objRecord.setValue({ fieldId: 'custitem_tkio_min_margen_art', value: min_margin });
                 var recordId = objRecord.save({ enableSourcing: true, ignoreMandatoryFields: true });

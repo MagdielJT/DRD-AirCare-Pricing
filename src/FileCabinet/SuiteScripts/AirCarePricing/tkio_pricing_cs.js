@@ -20,6 +20,8 @@ define(['N/url', 'N/currentRecord', 'N/ui/message', 'N/format', 'N/https', 'N/re
          */
         function pageInit(scriptContext) {
             try {
+                // var mensajeInfo = message.create({ type: message.Type.WARNING, title: "En pruebas", message: "Se estan realizando pruebas relacionadas al ultimo costo( Facturas )." });
+                // mensajeInfo.show({ duration: 1500 });
                 let currentForm = currentRecord.get();
                 var arrBase = currentForm.getValue({ fieldId: "custpage_tkio_arritems" });
                 if (arrBase) {
@@ -279,7 +281,7 @@ define(['N/url', 'N/currentRecord', 'N/ui/message', 'N/format', 'N/https', 'N/re
                                     body: arregloItems
                                 }
                                 console.log('arreglo Items - Incrementar: ', JSON.stringify(arregloItems));
-                                var mensajeInfo = message.create({ type: message.Type.INFORMATION, title: "Estado de la solicitud en proceso", message: "Se están agendando tus citas." });
+                                var mensajeInfo = message.create({ type: message.Type.INFORMATION, title: "Estado de la solicitud en proceso", message: "Buscando resultados." });
                                 mensajeInfo.show({ duration: 1500 });
                                 //=============================================================
                                 //Se Obtiene la direccion del script de Servicio para ejecutar la accion de incrementar
@@ -594,7 +596,7 @@ define(['N/url', 'N/currentRecord', 'N/ui/message', 'N/format', 'N/https', 'N/re
                                 check: check,
                                 id: id,
                                 itemCode: itemCode,
-                                listPrice:Number( parseFloat(listPrice) + (parseFloat(listPriceOr) * parseFloat(inc_suggest)) / 100).toFixed(3),
+                                listPrice: Number(parseFloat(listPrice) + (parseFloat(listPriceOr) * parseFloat(inc_suggest)) / 100).toFixed(3),
                                 listPriceOr: Number(listPriceOr).toFixed(3),
                                 pieces: pieces,
                                 lastCost: Number(lastCost).toFixed(3),

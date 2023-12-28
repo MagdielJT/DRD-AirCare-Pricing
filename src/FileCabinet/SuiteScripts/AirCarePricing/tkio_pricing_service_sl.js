@@ -189,17 +189,17 @@ define(['N/redirect', 'N/log', 'N/search', 'N/ui/serverWidget', 'N/url', 'N/http
                     let datosGuardar = [];
                     dataMxn.map(data => {
                         let inc_suggest = Number(data.inc_suggest);
-                        // if (inc_suggest < 0) {
-                        //     throw "incremento invalido";
-                        // }
+                        if (inc_suggest < 0) {
+                            throw "incremento invalido";
+                        }
                         data.currencyItem = "1"
                         datosGuardar.push(data)
                     });
                     dataUsd.map(data => {
                         let inc_suggest = Number(data.inc_suggest);
-                        // if (inc_suggest < 0) {
-                        //     throw "incremento invalido";
-                        // }
+                        if (inc_suggest < 0) {
+                            throw "incremento invalido";
+                        }
                         data.currencyItem = "2"
                         datosGuardar.push(data)
                     });

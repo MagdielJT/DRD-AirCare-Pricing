@@ -79,7 +79,7 @@ define(['N/log', 'N/task', 'N/record', 'N/runtime', 'N/search'],
 
                 for (var i = 0; i < data.arrmxn.length; i++) {
                     var objRecord = record.load({ type: 'assemblyitem', id: data.arrmxn[i].id });
-                    objRecord.setSublistValue({ sublistId: "price2", fieldId: 'price_1_', line: 0, value: ""});
+                    // objRecord.setSublistValue({ sublistId: "price2", fieldId: 'price_1_', line: 0, value: ""});
 
                     objRecord.setSublistValue({ sublistId: "price" + data.arrmxn[i].currencyItem, fieldId: 'price_1_', line: 0, value: data.arrmxn[i].listPrice});
                     var recordId = objRecord.save({ enableSourcing: true, ignoreMandatoryFields: true });
@@ -87,7 +87,7 @@ define(['N/log', 'N/task', 'N/record', 'N/runtime', 'N/search'],
 
                 for (var i = 0; i < data.arrusd.length; i++) {
                     var objRecord = record.load({ type: 'assemblyitem', id: data.arrusd[i].id });
-                    objRecord.setSublistValue({ sublistId: "price1", fieldId: 'price_1_', line: 0, value: ""});
+                    // objRecord.setSublistValue({ sublistId: "price1", fieldId: 'price_1_', line: 0, value: ""});
 
                     objRecord.setSublistValue({ sublistId: "price" + data.arrusd[i].currencyItem, fieldId: 'price_1_', line: 0, value: data.arrusd[i].listPrice});
                     var recordId = objRecord.save({ enableSourcing: true, ignoreMandatoryFields: true });

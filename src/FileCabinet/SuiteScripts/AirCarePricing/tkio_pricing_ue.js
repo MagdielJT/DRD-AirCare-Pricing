@@ -17,7 +17,19 @@ define(['N/ui/dialog', 'N/ui/serverWidget', 'N/search', 'N/log', 'N/runtime', 'N
          * @since 2015.2
          */
         const beforeLoad = (scriptContext) => {
-
+            try {
+                let tipoRegistro = scriptContext.newRecord.type;
+                switch (tipoRegistro) {
+                    case record.Type.CLASSIFICATION:
+                        log.audit({ title: 'Entrando en la configuracion de las Clases', details: true });
+                        break;
+                    case record.Type.ITEM_RECEIPT:
+                        log.audit({ title: 'Entrando en la configuracion de los Item Receipt', details: true });
+                        break;
+                }
+            } catch (e) {
+                log.error({ title: 'Error beforeLoad:', details: e });
+            }
         }
 
         /**
@@ -41,26 +53,40 @@ define(['N/ui/dialog', 'N/ui/serverWidget', 'N/search', 'N/log', 'N/runtime', 'N
          * @since 2015.2
          */
         const afterSubmit = (scriptContext) => {
-            try{
-            log.debug("Tipo", scriptContext.type);
-            if (scriptContext.type === scriptContext.UserEventType.EDIT) {
+            try {
+                log.debug("Tipo", scriptContext.type);
+                let tipoRegistro = scriptContext.newRecord.type;
+                switch (tipoRegistro) {
+                    case record.Type.CLASSIFICATION:
+                        if (scriptContext.type === scriptContext.UserEventType.EDIT) {
+                            var newRecord = scriptContext.newRecord;
+                            var id = newRecord.id;
+                            var sendData = sendMap(id);
+                        }
+                        break;
+                    case record.Type.ITEM_RECEIPT:
+                        if (scriptContext.type === scriptContext.UserEventType.EDIT || scriptContext.type === scriptContext.UserEventType.CREATE) {
 
-                var newRecord =  scriptContext.newRecord;
-                var id = newRecord.id;
+                            let rd = record.load({ type: scriptContext.newRecord.type, id: scriptContext.newRecord.id, isDynamic: true })
+                            let costValue = rd.getValue({ fieldId: 'landedcostamount31' });
+                            rd.setValue({ fieldId: 'custbody_tkio_landed_cost', value: costValue, ignoreFieldChange: true })
+                            rd.save({
+                                enableSourcing: true,
+                                ignoreMandatoryFields: true
+                            })
+                            log.audit({ title: 'rd', details: costValue });
+                        }
+                        break;
+                }
+            } catch (e) {
+                log.error({ title: 'afterSubmit', details: e });
 
-                var sendData = sendMap(id);
-                
-
-            }
-            }catch(e){
-                log.error({title: 'afterSubmit', details: e});
-                
             }
         }
 
-        function sendMap(id){
-            try{
-                log.debug({title: 'id', details: id});
+        function sendMap(id) {
+            try {
+                log.debug({ title: 'id', details: id });
                 var mrTask = task.create({
                     taskType: task.TaskType.MAP_REDUCE,
                     scriptId: 'customscript_tkio_pricing_update_margin',
@@ -72,10 +98,10 @@ define(['N/ui/dialog', 'N/ui/serverWidget', 'N/search', 'N/log', 'N/runtime', 'N
                 var idTask = mrTask.submit();
                 log.audit({ title: 'idTask', details: idTask });
 
-            }catch(e){
-                log.error({title: 'SendData', details: e})
+            } catch (e) {
+                log.error({ title: 'SendData', details: e })
             }
         }
-        return {beforeLoad, beforeSubmit, afterSubmit}
+        return { beforeLoad, beforeSubmit, afterSubmit }
 
     });

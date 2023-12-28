@@ -13,13 +13,13 @@
  * Modified by         -> Ricardo López <ricardo.lopez@freebug.mx>
  * Script in NS        -> Registro en Netsuite <ID del registro>
  */
-define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/record', 'N/runtime', './moment.min', 'N/format'],
+define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/config', 'N/record', 'N/runtime', './moment.min', 'N/format', 'N/url'],
     /**
      * @param{log} log
      * @param{search} search
      * @param{serverWidget} serverWidget
     */
-    (log, search, serverWidget, message, file, record, runtime, moment, format) => {
+    (log, search, serverWidget, message, file, config, record, runtime, moment, format, url) => {
         /**
          * Defines the Suitelet script trigger point.
          * @param {Object} scriptContext
@@ -31,6 +31,7 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
         let itemsList = [[], []];
         let itemsFiltrar = [];
         var arrID = '';
+        var unitsValue = {};
         const onRequest = (scriptContext) => {
             try {
                 var user = runtime.getCurrentUser().name;
@@ -39,6 +40,7 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
                 var form = creaPanel(scriptContext, params);
                 switch (params.action) {
                     case "filtrar":
+                        unitsValue = getUnitsValue();
                         itemsList = searchItems(params);
                         log.audit({ title: 'itemsList', details: itemsList });
                         addItemsList(form, itemsList[0], itemsList[1]);
@@ -108,6 +110,103 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
         /**
          * 
          * @param {*} arreglos 
+         * @summary {Función Obtiene las unidades para realizar las conversiones necesarias}
+         */
+        function getUnitsValue() {
+            try {
+
+                var unitstypeSearchObj = search.create({
+                    type: "unitstype",
+                    filters: [],
+                    columns:
+                        [
+                            search.createColumn({ name: "name", sort: search.Sort.ASC, label: "Name" }),
+                            search.createColumn({ name: "conversionrate", label: "Rate" }),
+                            search.createColumn({ name: "pluralabbreviation", label: "Abbreviation Name(Plural)" }),
+                            search.createColumn({ name: "abbreviation", label: "Abbreviation Name" }),
+                            search.createColumn({ name: "unitname", label: "Unit Name" }),
+                            search.createColumn({ name: "baseunit", label: "Is Base Unit" }),
+                            search.createColumn({ name: "internalid", label: "Internal ID" })
+                        ]
+                });
+                var searchResultCount = unitstypeSearchObj.runPaged().count;
+                log.debug("unitstypeSearchObj result count", searchResultCount);
+                let objAux = {};
+                unitstypeSearchObj.run().each(function (result) {
+                    let objPib = {
+                        unitGeneral: result.getValue({ name: 'name' }),
+                        unitName: result.getValue({ name: 'pluralabbreviation' }),
+                        unitNameAbr: result.getValue({ name: 'abbreviation' }),
+                        unitValue: result.getValue({ name: 'conversionrate' }),
+                        unitBase: result.getValue({ name: 'baseunit' }),
+                        internalid: result.getValue({ name: 'internalid' }),
+                    };
+                    if (objAux[objPib.unitGeneral]) {
+                        objAux[objPib.unitGeneral][objPib.unitName] = {
+                            value: parseFloat(objPib.unitValue),
+                            unitNameAbr: objPib.unitNameAbr,
+                            unitBase: objPib.unitBase
+                        }
+                    } else {
+                        objAux[objPib.unitGeneral] = {
+                            [objPib.unitName]: {
+                                value: parseFloat(objPib.unitValue),
+                                unitNameAbr: objPib.unitNameAbr,
+                                unitBase: objPib.unitBase
+                            }
+                        }
+                    }
+                    return true;
+                });
+                let objMaster = {};
+                // Objeto principal del cual se recorren sus respectivos objetos hijos ya agrupados
+                for (key in objAux) {
+                    // Objeto que se genera y vacia con cada iteracion del principal este objeto tendra la unidad base
+
+                    var objAux2 = objAux[key];
+                    // Obteniendo la unidad base dentro del sistema
+                    var objPib = {};
+                    // Agrupando aquellos que no tengan el check de verdadero
+                    let arrMaster = [];
+                    for (key2 in objAux2) {
+                        if (objAux2[key2].unitBase) {
+                            objPib = { clave: [key2], valores: objAux2[key2] };
+                        } else {
+                            arrMaster.push({ clave: [key2], valores: objAux2[key2] })
+                        }
+                    }
+                    if (arrMaster.length > 0) {
+                        arrMaster.forEach(unit => {
+                            objMaster[unit.clave] = {
+                                [objPib.clave]: objPib.valores,
+                                [unit.clave]: unit.valores
+                            }
+                            objMaster[objPib.clave] = {
+                                [objPib.clave]: objPib.valores,
+                                [unit.clave]: unit.valores
+                            }
+                        })
+                    }
+                    else {
+                        objMaster[objPib.clave] = {
+                            [objPib.clave]: objPib.valores,
+                        }
+                    }
+                    arrMaster = [];
+                    objPib = {};
+                }
+                //objAux = objMaster;
+                log.audit({ title: 'objAux', details: objAux });
+                log.audit({ title: 'Count key', details: Object.keys(objAux).length });
+                return objAux;
+            } catch (e) {
+                log.error({ title: 'Error getUnitsValue:', details: e });
+                return {}
+            }
+        }
+        /**
+         * 
+         * @param {*} arreglos 
          * @summary {Función que servirá para crear un archivo TXT}
          */
         function createFileObj(arreglos) {
@@ -163,7 +262,6 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
                 log.error({ title: 'infoSystem: ', details: e });
             }
         }
-
         /**
          * @summary función que servirá para guardar la lista en un txt
          */
@@ -182,8 +280,6 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
 
         function creaPanel() {
             try {
-                var clases = searchClass();
-                var periodos = searchPeriodoContable();
                 var form = serverWidget.createForm({ title: "Precios" });
 
                 form.clientScriptModulePath = './tkio_pricing_cs.js';
@@ -195,20 +291,13 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
                 form.addButton({ id: "custpage_tkio_desmarcartodo", label: "Desmarcar todo", functionName: "dismarkAll" });
 
                 //Campos
-                var period = form.addField({ id: "custpage_tkio_periodocontable", type: serverWidget.FieldType.SELECT, label: "PERIODO CONTABLE" })
+                var period = form.addField({ id: "custpage_tkio_periodocontable", type: serverWidget.FieldType.SELECT, source: record.Type.ACCOUNTING_PERIOD, label: "PERIODO CONTABLE" })
                 // var cambioUSD = form.addField({ id: "custpage_tkio_cambiopeso", type: serverWidget.FieldType.FLOAT, label: "TIPO DE CAMBIO PESO-DOLAR" })
                 var cambioUSD = form.addField({ id: "custpage_tkio_cambiopeso", type: serverWidget.FieldType.FLOAT, label: "TIPO DE CAMBIO MXP - USD" })
-                var classFilter = form.addField({ id: "custpage_tkio_clase", type: serverWidget.FieldType.SELECT, label: "CLASE" })
+                var classFilter = form.addField({ id: "custpage_tkio_clase", type: serverWidget.FieldType.SELECT, source: record.Type.CLASSIFICATION, label: "CLASE" })
 
-                classFilter.addSelectOption({ value: '', text: '' });
-                for (var i = 0; i < clases.length; i++) {
-                    classFilter.addSelectOption({ value: clases[i].value, text: clases[i].text });
-                }
+
                 var cambioMXN = form.addField({ id: "custpage_tkio_cambiodolar", type: serverWidget.FieldType.FLOAT, label: "TIPO DE CAMBIO USD - MXP" })
-                period.addSelectOption({ value: '', text: '' });
-                for (var i = 0; i < periodos.length; i++) {
-                    period.addSelectOption({ value: periodos[i].id, text: periodos[i].periodname });
-                }
 
                 if (params.periodo) { period.defaultValue = params.periodo; }
                 if (params.clase) { classFilter.defaultValue = params.clase; }
@@ -296,75 +385,6 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
                 log.error({ title: "error creaPanel", details: e });
             }
         }
-        function searchClass() {
-            try {
-                var arrClassAux = []
-                var classificationSearchObj = search.create({
-                    type: "classification",
-                    filters: [],
-                    columns:
-                        [
-                            search.createColumn({ name: "name", sort: search.Sort.ASC, label: "Nombre" }),
-                            search.createColumn({ name: "custrecord_tkio_max_margen", label: "Margen Máximo" }),
-                            search.createColumn({ name: "custrecord_tkio_min_margen", label: "Margen Minimo" })
-                        ]
-                });
-                var searchResult = classificationSearchObj.runPaged().count;
-                classificationSearchObj.run().each(function (result) {
-                    var id = result.id;
-                    var name = result.getValue({ name: "name" });
-                    var margenMax = parseFloat(result.getValue({ name: "custrecord_tkio_max_margen" })) || 0;
-                    var margenMin = parseFloat(result.getValue({ name: "custrecord_tkio_min_margen" })) || 0;
-                    arrClassAux.push({
-                        text: name,
-                        value: id,
-                        margenMax: margenMax,
-                        margenMin: margenMin,
-                    })
-                    return true;
-                });
-                return arrClassAux;
-            } catch (e) {
-                log.audit({ title: 'searchClassError', details: e });
-                return [];
-            }
-        }
-        function searchPeriodoContable() {
-            try {
-                let arrPeriodoAux = [];
-                var accountingperiodSearchObj = search.create({
-                    type: "accountingperiod",
-                    filters:
-                        [
-                            ["closed", "is", "F"],
-                            "AND",
-                            ["isquarter", "is", "F"],
-                            "AND",
-                            ["isadjust", "is", "F"],
-                            "AND",
-                            ["isyear", "is", "F"]
-                        ],
-                    columns:
-                        [
-                            search.createColumn({ name: "periodname", label: "Nombre" }),
-                            search.createColumn({ name: "isinactive", label: "Inactivo" })
-                        ]
-                });
-                accountingperiodSearchObj.run().each(function (result) {
-                    var id = result.id;
-                    var periodname = result.getValue({ name: "periodname" });
-                    arrPeriodoAux.push({
-                        id: id,
-                        periodname: periodname
-                    });
-                    return true;
-                });
-                return arrPeriodoAux;
-            } catch (e) {
-                log.error({ title: 'Error', details: Error });
-                return [];
-            }
-        }
         /**
          * 
          * @param {*} clase
@@ -383,18 +403,17 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
                             ["type", "anyof", "Assembly"],
                             "AND",
                             ["class", "anyof", clase],
-                            "AND",
-                            ["internalid", "anyof", '518'],
-                            "AND",
-                            ["custitem_tkio_art_subensasmblaje", "is", "F"]
-
+                            // "AND",
+                            // ["internalid", "anyof", '5108'],
+                            // "AND",
+                            // ["custitem_tkio_art_subensasmblaje", "is", "F"]
                         ],
                     columns:
                         [
                             search.createColumn({ name: "itemid", summary: "GROUP", sort: search.Sort.ASC, label: "Nombre" }),
                             search.createColumn({ name: "displayname", summary: "GROUP", label: "Nombre para mostrar" }),
                             search.createColumn({ name: "salesdescription", summary: "GROUP", label: "Descripción" }),
-                            // search.createColumn({ name: "baseprice", summary: "AVG", label: "Precio base" }),
+                            search.createColumn({ name: "lastpurchaseprice", summary: "MAX", label: "Ultimo precio de compra" }),
                             search.createColumn({ name: "unitprice", join: "pricing", summary: "MAX", label: "Unit Price" }),
                             search.createColumn({ name: "custitem_tkio_max_margen_art", summary: "AVG", label: "Margen Máximo" }),
                             search.createColumn({ name: "custitem_tkio_min_margen_art", summary: "AVG", label: "Margen Minimo" }),
@@ -402,90 +421,132 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
                             search.createColumn({ name: "averagecost", summary: "AVG", label: "Costo promedio" }),
                             search.createColumn({ name: "billofmaterialsid", join: "assemblyItemBillOfMaterials", summary: "GROUP", label: "Identificación de la lista de materiales" }),
                             search.createColumn({ name: "internalid", summary: "GROUP", label: "ID interno" }),
-                            search.createColumn({ name: "currency", join: "pricing", summary: "GROUP", label: "Moneda" })
-                        ]
+                            search.createColumn({ name: "currency", join: "pricing", summary: "GROUP", label: "Moneda" }),
+                            search.createColumn({ name: "custitem_tkio_art_subensasmblaje", summary: "GROUP", label: "Artículo subensamblaje" })
+                        ],
+                    id: 'customsearch_get_items_ens_ss',
+                    title: 'FB - Obten Items Ensamblaje'
                 });
                 var searchResultCount = assemblyitemSearchObj.runPaged().count;
+                // assemblyitemSearchObj.save()
                 log.debug("assemblyitemSearchObj result count", searchResultCount);
-                assemblyitemSearchObj.run().each(function (result) {
-                    // log.audit({ title: 'currencyItem', details: result });
-                    // var id = result.id;
-                    var id = result.getValue({ name: "internalid", summary: "GROUP" });
-                    arrID += id + ','
-                    var itemCode = result.getValue({ name: "itemid", summary: "GROUP" });
-                    var idMaterialList = result.getValue({ name: "billofmaterialsid", join: "assemblyItemBillOfMaterials", summary: "GROUP" });
-                    // var listPrice = parseFloat(result.getValue({ name: "baseprice", summary: "AVG" })) || 1;
-                    var currencyItem = result.getValue({ name: "currency", join: "pricing", summary: "GROUP" });
-                    var listPrice = parseFloat(result.getValue({ name: "unitprice", join: "pricing", summary: "MAX" })) || 1;
-                    var min_margin = parseFloat(result.getValue({ name: "custitem_tkio_min_margen_art", summary: "AVG" }).replace('%', '')) || 0;
-                    var max_margin = parseFloat(result.getValue({ name: "custitem_tkio_max_margen_art", summary: "AVG" }).replace('%', '')) || 0;
-                    var averageCost = parseFloat(result.getValue({ name: "averagecost", summary: "AVG" })) || 0;
-                    idItemsEnsamblaje.push(id);
-                    idListMaterials.push(idMaterialList);
-                    arrItemsAux.push({
-                        id: id,
-                        itemCode: itemCode,
-                        listPrice: Number(listPrice.toFixed(3)),
-                        listPriceOr: Number(listPrice.toFixed(3)),
-                        pieces: 0,
-                        lastCost: 0,
-                        saleCost: 0,
-                        currencyItem: currencyItem,
-                        averageCost: averageCost,
-                        min_margin: min_margin,
-                        max_margin: max_margin,
-                        clase: clase,
-                        periodo: periodo,
-                        monedaMxn: monedaMxn,
-                        monedaUsd: monedaUsd,
-                        real_margin: 0,
-                        theoretical_margin: 0,
-                        inc_suggest: 0,
-                        amount: 0,
-                        idMaterialList: idMaterialList,
-                        materialList: [],
-                    });
-                    return true;
+                // assemblyitemSearchObj.run().each(function (result) {
+                var myPagedResults = assemblyitemSearchObj.runPaged({
+                    pageSize: 1000
                 });
+                var thePageRanges = myPagedResults.pageRanges;
+                for (var i in thePageRanges) {
+                    var thepageData = myPagedResults.fetch({
+                        index: thePageRanges[i].index
+                    });
+                    thepageData.data.forEach(function (result) {
+                        // log.audit({ title: 'currencyItem', details: result });
+                        // var id = result.id;
+                        var id = result.getValue({ name: "internalid", summary: "GROUP" });
+                        arrID += id + ','
+                        var itemCode = result.getValue({ name: "itemid", summary: "GROUP" });
+                        var idMaterialList = result.getValue({ name: "billofmaterialsid", join: "assemblyItemBillOfMaterials", summary: "GROUP" });
+                        // var listPrice = parseFloat(result.getValue({ name: "baseprice", summary: "AVG" })) || 1;
+                        var currencyItem = result.getValue({ name: "currency", join: "pricing", summary: "GROUP" });
+                        var listPrice = parseFloat(result.getValue({ name: "unitprice", join: "pricing", summary: "MAX" })) || 0;
+                        var lastpurchaseprice = parseFloat(result.getValue({ name: "lastpurchaseprice", summary: "MAX" })) || 0;
+                        var min_margin = parseFloat(result.getValue({ name: "custitem_tkio_min_margen_art", summary: "AVG" }).replace('%', '')) || 0;
+                        var max_margin = parseFloat(result.getValue({ name: "custitem_tkio_max_margen_art", summary: "AVG" }).replace('%', '')) || 0;
+                        var averageCost = parseFloat(result.getValue({ name: "averagecost", summary: "AVG" })) || 0;
+                        var artiSub = result.getValue({ name: "custitem_tkio_art_subensasmblaje", summary: "GROUP" }) || false;
+                        idItemsEnsamblaje.push(id);
+                        idListMaterials.push(idMaterialList);
+                        // log.audit({ title: 'Articulo Ensamblaje', details: result });
+                        log.debug({title: 'listPrice', details: listPrice});
+                        log.debug({title: 'lastpurchaseprice', details: lastpurchaseprice});
+                        arrItemsAux.push({
+                            id: id,
+                            itemCode: itemCode,
+                            listPrice: Number(listPrice.toFixed(3)),
+                            listPriceOr: Number(listPrice.toFixed(3)),
+                            artiSub: artiSub,
+                            pieces: 0,
+                            lastCost: 0,
+                            saleCost: 0,
+                            currencyItem: currencyItem,
+                            averageCost: (averageCost === 0 ? lastpurchaseprice : averageCost),
+                            min_margin: min_margin,
+                            max_margin: max_margin,
+                            clase: clase,
+                            periodo: periodo,
+                            monedaMxn: monedaMxn,
+                            monedaUsd: monedaUsd,
+                            real_margin: 0,
+                            theoretical_margin: 0,
+                            inc_suggest: 0,
+                            amount: 0,
+                            idMaterialList: idMaterialList,
+                            materialList: [],
+                        });
+                        return true;
+                    });
+                }
 
+                log.debug({ title: 'arrItemsAux', details: arrItemsAux });
                 //Se obtiene la lista de manterial, lista de revision y con cada uno de los componentes que este tiene
                 //en el articulo de encamblaje mediante el id de la lista de material
-                let revision = getListRevision(idListMaterials, arrItemsAux, monedaMxn, monedaUsd);
+                let revision = (idListMaterials.length > 0 ? getListRevision(idListMaterials, arrItemsAux, monedaMxn, monedaUsd) : []);
                 arrItemsAux.map(item => {
                     revision.forEach(rev => {
+                        //Asginacion de la lista de revision y el ultimo costo
                         if (item.idMaterialList === rev.idMaterialList) {
                             item.materialList.push(rev);
-                            item.averageCost = (rev.averageCostListRev === 0 ? item.averageCost : rev.averageCostListRev);
-                            item.lastCost += parseFloat(rev.cost)
+                            item.materialList.forEach(rev => {
+                                item.lastCost = (item.currencyItem === '2' ? rev.costUSD : rev.costMXN)
+                            });
                         }
                     })
                 });
                 log.debug({ title: 'idItemsEnsamblaje:', details: idItemsEnsamblaje });
-                let datosSO = getDataSO(idItemsEnsamblaje);
+                let datosSO = (idItemsEnsamblaje.length > 0 ? getDataSO(periodo, idItemsEnsamblaje) : []);
+                let datosOT = (idItemsEnsamblaje.length > 0 ? getDataOT(idItemsEnsamblaje) : []);
+                log.audit({ title: 'datosOT', details: datosOT });
+                log.audit({ title: 'datosSO', details: datosSO });
                 log.debug({ title: 'arrItemsAux', details: arrItemsAux[0] });
-                // log.audit({ title: 'Articulo ensamblaje con lista de componentes', details: arrItemsAux });
+
+                //Ajustando a aquellos articulos de ensamblaje que estan dentro de la lista de revisiones
+                var arrItemsAux2 = arrItemsAux;
+
                 arrItemsAux.map(item => {
-                    var ultimoCosto = 0.0;
-                    var unitCostItem = 0.0;
-                    item.materialList.forEach(rev => {
-                        rev.listaMateriales.forEach(idItem => {
-                            ultimoCosto += parseFloat(idItem.cost);
-                            unitCostItem += idItem.listPrice * parseFloat(idItem.cantidad);
-                        });
-                    });
-                    //log.audit({ title: 'arrItemsAux unitCostItem:', details: arrItemsAux.cost });
-                    datosSO.forEach(datos => {
+                    (item.materialList[0].listaMateriales).map(itemsLista => {
+                        for (var i = 0; i < arrItemsAux2.length; i++) {
+                            if (arrItemsAux2[i].id === itemsLista.idItemComponent) {
+                                item.lastCost += (item.currencyItem === arrItemsAux2[i].currencyItem ? arrItemsAux2[i].lastCost * parseFloat(itemsLista.cantidad) : (arrItemsAux2[i].currencyItem == '1' ? (arrItemsAux2[i].lastCost * monedaUsd) * parseFloat(itemsLista.cantidad) : (arrItemsAux2[i].lastCost * monedaMxnparseFloat(itemsLista.cantidad))));
+                            }
+                        }
+                    })
+                })
+                arrItemsAux.map(item => {
+                    //Asignacion del ultimo costo tomando en cuenta las ordenes de trabajo relacionadas al articulo de ensamblaje
+                    datosOT.forEach(datos => {
                         if (item.id === datos.id) {
+                            if (item.currencyItem === '1') {
+                                item.lastCost += datos.cost
+                                // item.lastCost += (datos.currency === '1' ? datos.cost : datos.cost / monedaMxn)
+                            }
+                            if (item.currencyItem === '2') {
+                                item.lastCost += datos.cost
+                            }
+                        }
+                    })
+                    //Asignacion de datos relacionados con las ordenes de venta
+                    datosSO.forEach(datos => {
+                        if (item.id === datos.id && item.currencyItem === datos.currency) {
                             item.amount = datos.amount;
                             item.pieces = datos.quantity;
                             item.saleCost = Number(((datos.saleCost)).toFixed(3));
-                            item.real_margin = (datos.saleCost - item.averageCost) / datos.saleCost;
+                            item.real_margin = ((datos.saleCost - item.averageCost) / datos.saleCost) * 100;
                         }
                     })
-                    //log.audit({ title: 'Ultimo costo', details: { ultimoCosto: ultimoCosto, unitCostItem: unitCostItem } });
-                    item.lastCost += Number(((ultimoCosto + unitCostItem)).toFixed(3));
-                    item.theoretical_margin = Number((((item.listPrice - item.lastCost) / item.listPrice)).toFixed(3));
-                    item.inc_suggest = item.theoretical_margin - item.max_margin
+                    var costoPromedio = (item.pieces === 0 ? item.averageCost : item.lastCost / item.pieces);
+                    item.averageCost = (costoPromedio < item.averageCost ? item.averageCost : costoPromedio);
+                    item.theoretical_margin = (item.listPrice !== 0 ? Number((((item.listPrice - item.lastCost) / item.listPrice)).toFixed(3)) * 100 : 0);
+                    item.inc_suggest = (item.theoretical_margin < item.max_margin ? item.max_margin - item.theoretical_margin : 0)
                 });
                 log.audit({ title: 'Articulo ensamblaje completo', details: arrItemsAux });
                 return arrItemsAux;
@@ -496,21 +557,24 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
         }
         //Se obtienen las ordenes de ventas relacionadas con el articulo de ensamblaje, para determinar los costos
         //Tomando en cuenta los periodos de fecha establecidos
-        function getDataSO(idItemsEnsamblaje) {
+        function getDataSO(periodo, idItemsEnsamblaje) {
             try {
+                log.audit({ title: 'periodo', details: periodo });
+                let fechas = search.lookupFields({ type: 'accountingperiod', id: periodo, columns: ['startdate', 'enddate'] })
+                log.audit({ title: 'fechas', details: fechas });
                 let itemsData = [];
                 var date = new Date()
                 var fecha = moment(date).locale('es-mx').format('DD/MM/YYYY').split('/');
-                log.debug({ title: 'Fecha actual: ', details: fecha });
+                //log.debug({ title: 'Fecha actual: ', details: fecha });
                 date = date.setMonth(date.getMonth() - 12)
-                log.debug({ title: 'date:', details: date });
+                //log.debug({ title: 'date:', details: date });
                 var fechaArreglo = moment(date).locale('es-mx').format('DD/MM/YYYY').split('/');
                 var fechaInicio = "1/1/" + fechaArreglo[2];
                 var fechaFin = "12/31/" + fecha[2];
-                log.audit({
+                /*log.audit({
                     title: "Fecha: ",
                     details: fechaArreglo
-                })
+                })*/
                 var salesorderSearchObj = search.create({
                     type: "salesorder",
                     filters:
@@ -519,28 +583,43 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
                             "AND",
                             ["item.internalid", "anyof", idItemsEnsamblaje],
                             "AND",
-                            ["trandate", "within", fechaInicio, fechaFin]
+                            ["trandate", "within", fechas.startdate, fechas.enddate]
                         ],
                     columns:
                         [
+                            search.createColumn({ name: "currency", summary: "GROUP", label: "Moneda" }),
                             search.createColumn({ name: "quantity", summary: "SUM", label: "Cantidad" }),
-                            search.createColumn({ name: "amount", summary: "SUM", label: "Importe" }),
+                            search.createColumn({ name: "fxamount", summary: "SUM", label: "Importe" }),
                             search.createColumn({ name: "internalid", join: "item", summary: "GROUP", label: "ID interno" })
-                        ]
+                        ],
+                    id: 'customsearch_get_sales_ens_ss',
+                    title: 'FB - Obten ventas de Items - SS'
                 });
-                salesorderSearchObj.run().each(function (result) {
-                    var id = result.getValue({ name: "internalid", join: "item", summary: "GROUP" });
-                    var quantity = parseInt(result.getValue({ name: "quantity", summary: "SUM" }));
-                    var amount = parseFloat(result.getValue({ name: "amount", summary: "SUM" }));
-                    var saleCost = amount / quantity;
-                    itemsData.push({
-                        id: id,
-                        quantity: quantity,
-                        amount: amount,
-                        saleCost: saleCost
-                    })
-                    return true;
+                // salesorderSearchObj.save();
+                var myPagedResults = salesorderSearchObj.runPaged({
+                    pageSize: 1000
                 });
+                var thePageRanges = myPagedResults.pageRanges;
+                for (var i in thePageRanges) {
+                    var thepageData = myPagedResults.fetch({
+                        index: thePageRanges[i].index
+                    });
+                    thepageData.data.forEach(function (result) {
+                        var id = result.getValue({ name: "internalid", join: "item", summary: "GROUP" });
+                        var currency = result.getValue({ name: "currency", summary: "GROUP" });
+                        var quantity = parseInt(result.getValue({ name: "quantity", summary: "SUM" }));
+                        var amount = parseFloat(result.getValue({ name: "fxamount", summary: "SUM" }));
+                        var saleCost = amount / quantity;
+                        itemsData.push({
+                            id: id,
+                            currency: currency,
+                            quantity: quantity,
+                            amount: amount,
+                            saleCost: saleCost
+                        })
+                        return true;
+                    });
+                }
                 log.debug({ title: 'itemsData', details: itemsData });
                 return itemsData;
             } catch (error) {
@@ -548,6 +627,80 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
                 return [];
             }
         }
+        //Se obtienen los gastos por mano de obra de cada articulo de ensamblaje
+        function getDataOT(idItemsEnsamblaje) {
+            try {
+                let arrDataOT = [];
+                var date = new Date()
+                var fecha = moment(date).locale('es-mx').format('DD/MM/YYYY').split('/');
+                //log.debug({ title: 'Fecha actual: ', details: fecha });
+                date = date.setMonth(date.getMonth() - 12)
+                //log.debug({ title: 'date:', details: date });
+                var fechaArreglo = moment(date).locale('es-mx').format('DD/MM/YYYY').split('/');
+                var fechaInicio = "1/1/" + fechaArreglo[2];
+                var fechaFin = "12/31/" + fecha[2];
+                /*log.audit({
+                    title: "Fecha: ",
+                    details: fechaArreglo
+                })*/
+                var workordercompletionSearchObj = search.create({
+                    type: "workordercompletion",
+                    filters:
+                        [
+                            ["type", "anyof", "WOCompl"],
+                            "AND",
+                            ["quantity", "greaterthan", "0"],
+                            "AND",
+                            ["mainline", "is", "F"],
+                            "AND",
+                            ["item.internalid", "anyof", idItemsEnsamblaje],
+                            "AND",
+                            ["trandate", "within", fechaInicio, fechaFin]
+                        ],
+                    columns:
+                        [
+                            search.createColumn({ name: "formulanumeric", summary: "MAX", formula: "ROUND({amount}/ABS({quantity}),3)", label: "Formula (Numeric)" }),
+                            search.createColumn({ name: "item", summary: "GROUP", label: "Item" }),
+                            search.createColumn({ name: "currency", summary: "GROUP", label: "Currency" })
+                        ]
+                });
+                var searchResultCount = workordercompletionSearchObj.runPaged().count;
+                log.debug("workordercompletionSearchObj result count", searchResultCount);
+                // workordercompletionSearchObj.run().each(function (result) {
+                var myPagedResults = workordercompletionSearchObj.runPaged({
+                    pageSize: 1000
+                });
+                var thePageRanges = myPagedResults.pageRanges;
+                for (var i in thePageRanges) {
+                    var thepageData = myPagedResults.fetch({
+                        index: thePageRanges[i].index
+                    });
+                    thepageData.data.forEach(function (result) {
+                        log.audit({ title: 'result', details: result });
+                        var id = result.getValue({ name: "item", summary: "GROUP" });
+                        var cost = Math.abs(parseFloat(result.getValue({ name: "formulanumeric", summary: "MAX" })));
+                        var currency = result.getValue({ name: "currency", summary: "GROUP" });
+                        arrDataOT.push({
+                            id: id,
+                            cost: cost,
+                            currency: currency
+                        })
+                        return true;
+                    });
+                }
+                return arrDataOT;
+            } catch (e) {
+                log.error({ title: 'Error getDataOT:', details: e });
+                return []
+            }
+        }
+        //Para el ultimo costo se calculara de la siguiente manera, se obtiene 
+        // 1. la lista de revision
+        // 2. La lista de los componente y con ello se hacen diversas busquedas guardadas, para obtener los costos mas altos:
+        //      *De los ajustes de Inventario
+        //      *De las recepciones de envio
+        //      *De las facturas
+        //      *De las ordenes de compra aqui se obtiene el promedio
         /**
          * 
          * @param {*} idMaterials
@@ -572,31 +725,45 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
                         ]
                 });
 
-                bomSearchObj.run().each(function (result) {
-                    var idRevision = result.getValue({ name: "internalid", join: "revision" });
-                    var idMaterialList = result.id;
-                    idRevs.push(idRevision);
-                    arrListRev.push({
-                        idRevision: idRevision,
-                        averageCostListRev: 0,
-                        cost: 0,
-                        idMaterialList: idMaterialList,//para relacionar la lista de revision con sus respectivos articulos de ensamblaje
-                        listaMateriales: []//lista de los componentes de las revisiones
-                    });
-                    return true;
+                // bomSearchObj.run().each(function (result) {
+                var myPagedResults = bomSearchObj.runPaged({
+                    pageSize: 1000
                 });
+                var thePageRanges = myPagedResults.pageRanges;
+                for (var i in thePageRanges) {
+                    var thepageData = myPagedResults.fetch({
+                        index: thePageRanges[i].index
+                    });
+                    thepageData.data.forEach(function (result) {
+                        var idRevision = result.getValue({ name: "internalid", join: "revision" });
+                        var idMaterialList = result.id;
+                        idRevs.push(idRevision);
+                        arrListRev.push({
+                            idRevision: idRevision,
+                            averageCostListRev: 0,
+                            costMXN: 0,
+                            costUSD: 0,
+                            idMaterialList: idMaterialList,//para relacionar la lista de revision con sus respectivos articulos de ensamblaje
+                            listaMateriales: []//lista de los componentes de las revisiones
+                        });
+                        return true;
+                    });
+                }
 
                 let dataGetListComponent = getListComponents(idRevs, arrItemsAux, monedaMxn, monedaUsd);
-                let listaMateriales = dataGetListComponent[1];
-                let averageCostListRev = dataGetListComponent[0];
+                //let listaMateriales = dataGetListComponent[1];
+                //let averageCostListRev = dataGetListComponent[0];
                 //Relación entre la lista de materiales y la lista de revisión
+                log.audit({ title: 'arrListRev', details: arrListRev });
+                log.audit({ title: 'dataGetListComponent', details: dataGetListComponent });
                 arrListRev.map(listaRevision => {
-                    listaMateriales.forEach(listMaterial => {
+                    dataGetListComponent.forEach(listMaterial => {
                         if (listaRevision.idRevision === listMaterial.id) {
                             listaRevision.listaMateriales.push(listMaterial);
-                        }
-                        if (listaRevision.listaMateriales.length > 0) {
-                            listaRevision.cost += listMaterial.cost
+                            listaRevision.costMXN += (listMaterial.costMXN);
+                            listaRevision.costUSD += (listMaterial.costUSD);
+                            // listaRevision.costMXN += (listMaterial.costMXN === 0 ? listMaterial.listPrice : listMaterial.costMXN);
+                            // listaRevision.costUSD += (listMaterial.costUSD === 0 ? listMaterial.listPrice : listMaterial.costUSD);
                         }
                     })
                 })
@@ -617,6 +784,7 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
                 let arrListComponents = [];
                 var averageCostListRev = 0;
                 var idItemArt = [];
+                var idItem = [];
                 var bomrevisionSearchObj = search.create({
                     type: "bomrevision",
                     filters:
@@ -628,101 +796,229 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
                             search.createColumn({ name: "billofmaterials", label: "Lista de materiales" }),
                             search.createColumn({ name: "name", label: "Nombre" }),
                             search.createColumn({ name: "item", join: "component", label: "Artículo" }),
-                            search.createColumn({ name: "quantity", join: "component", label: "Cantidad" })
-                        ]
+                            search.createColumn({ name: "quantity", join: "component", label: "Cantidad" }),
+                            search.createColumn({ name: "baseunits", join: "component", label: "Base Units" })
+                        ],
+                    id: 'customsearch_bomrevision_list',
+                    title: 'getListComponents'
                 });
-                bomrevisionSearchObj.run().each(function (result) {
-                    var id = result.id;
-                    var idItemComponent = result.getValue({ name: "item", join: "component" });
-                    var cantidad = result.getValue({ name: "quantity", join: "component" });
-                    let dataItem = search.lookupFields({ type: search.Type.ITEM, id: idItemComponent, columns: ['baseprice', 'vendorpricecurrency', 'type', 'averagecost'] })
-                    var listPrice = dataItem.baseprice;
-                    var vendorpricecurrency = dataItem.vendorpricecurrency;
-                    var averageCost = parseFloat(dataItem.averagecost) || 0;
-                    if (dataItem.type[0].value.toUpperCase() === "INVTPART") {
-                        idItemArt.push(idItemComponent);
-                    }
-                    arrListComponents.push({
-                        id: id,
-                        idItemComponent: idItemComponent,
-                        cantidad: cantidad,
-                        listPrice: listPrice,
-                        averageCost: averageCost,
-                        cost: 0,
-                        vendorpricecurrency: vendorpricecurrency,
-                        type: dataItem.type[0].value
+                // bomrevisionSearchObj.save()
+                // bomrevisionSearchObj.run().each(function (result) {
+                var myPagedResults = bomrevisionSearchObj.runPaged({
+                    pageSize: 1000
+                });
+                var thePageRanges = myPagedResults.pageRanges;
+                for (var i in thePageRanges) {
+                    var thepageData = myPagedResults.fetch({
+                        index: thePageRanges[i].index
                     });
-                    return true;
-                });
-                log.debug({ title: 'Count Articulos de inventario: ', details: idItemArt.length });
-                //A continuacion se buscan los costos incrementables
+                    thepageData.data.forEach(function (result) {
+                        var id = result.id;
+                        var idItemComponent = result.getValue({ name: "item", join: "component" });
+                        var cantidad = result.getValue({ name: "quantity", join: "component" });
+                        var unit = result.getValue({ name: "baseunits", join: "component" });
+                        // let dataItem = search.lookupFields({ type: search.Type.ITEM, id: idItemComponent, columns: ['baseprice', 'vendorpricecurrency', 'type', 'averagecost'] })
+                        // var listPrice = parseFloat(dataItem.baseprice) || 0;
+                        // var vendorpricecurrency = dataItem.vendorpricecurrency;
+                        // var averageCost = parseFloat(dataItem.averagecost) || 0;
+                        // if (dataItem.type[0].value.toUpperCase() === "INVTPART") {
+                        //     idItemArt.push(idItemComponent);
+                        // }
+                        idItem.push(idItemComponent);
+                        arrListComponents.push({
+                            id: id,
+                            idItemComponent: idItemComponent,
+                            cantidad: cantidad,
+                            unit: unit,
+                            listPrice: 0,
+                            averageCost: 0,
+                            cost: 0,
+                            costUSD: 0,
+                            costMXN: 0,
+                            vendorpricecurrency: 0,
+                            type: '',
+                            artiSub: false
+                        });
+                        return true;
+                    });
+                }
+                // Se quitan los IDS repetidos
+                idItem = [... new Set(idItem)];
+                // idItem = ['4459'];
+                log.debug({ title: 'Count Articulos de inventario: ', details: idItem.length });
+                //Costos mas altos
+                log.debug({ title: 'idItem', details: idItem });
+                // Busqueda del inventario 
+                idItemArt = getDataII(idItem, arrListComponents);
+                log.audit({ title: 'arrListComponents dataII', details: arrListComponents });
 
-                //Busqueda de los ajustes de inventario (Costo promedio y cantidad por articulo inventariable)
-                var dataAI = getDataAI(idItemArt);
-                log.debug({ title: 'dataAI result:', details: dataAI });
-                //Busqueda de las recepciones de articulo (Costo de envio)
-                var dataLC = getLandedCost(idItemArt);
-                log.debug({ title: 'dataLC result:', details: dataLC });
-                //Busqueda de las facturas (Agente aduanal y seguro) 
-                var dataBill = getDataBill(idItemArt);
-                log.debug({ title: 'dataBill result:', details: dataBill });
                 //Se obtiene el gasto de cada articulo de inventario, 
                 //mediante una busqueda de las ordenes de compra 
-                var dataPO = getDataPO(idItemArt, arrListComponents);
-
+                var dataPO = getDataPO(idItemArt, arrListComponents, monedaMxn, monedaUsd);
                 log.audit({ title: 'dataPO', details: dataPO });
-                //Asginacion de los datos obtenidos
+
+                // let datos = dataPO.concat(dataAI);
+                let datos = dataPO;
+                var datoMasAlto = getDatoMasAlto(datos, 'PO');
+                log.audit({ title: 'datPO result:', details: datoMasAlto });
+
+                //Costos incrementables
+                //Busqueda de las recepciones de articulo (Costo de envio)
+                var dataLCDatos = getLandedCost(idItemArt);
+                var dataLCDatosperLine = getLandedCostPerLine(idItemArt) || [];
+                dataLCDatos = dataLCDatos.concat(dataLCDatosperLine)
+                log.debug({ title: 'dataLC result:', details: dataLCDatos });
+                var dataLC = getDatoMasAlto(dataLCDatos, 'IR');
+
+                //Busqueda de las facturas (Agente aduanal y seguro) 
+                var dataBillDatos = getDataBill(idItemArt);
+                log.debug({ title: 'dataBill resultados:', details: dataBillDatos });
+                var dataBill = getDatoMasAlto(dataBillDatos, 'BILL');
+                log.debug({ title: 'dataBILL result:', details: dataBill });
+
+                log.audit({ title: 'arrListComponents.length', details: arrListComponents.length });
+                log.audit({ title: 'arrListComponents', details: arrListComponents });
                 arrListComponents.map(itemMod => {
-                    var costo = 0.0;
-                    //Se asignan los costos promedios y cantidad a la lista de revision 
-                    dataAI.forEach(dataItem => {
+                    var costoUSD = 0.0;
+                    var costoMXN = 0.0;
+                    //log.debug({ title: 'Costo sumando BILL', details: { costoUSD: costoUSD, costoMXN: costoMXN } });
+                    //Se asigna el costo mas alto de ajuste de inventario o de orden de compra
+                    var unidadCostoConvertidaPO = 0;
+                    datoMasAlto.forEach(dataItem => {
+
                         if (itemMod.idItemComponent === dataItem.id) {
-                            itemMod.averageCost = dataItem.averageCost;
-                            costo += dataItem.averageCost;
+                            let flagCondition = true;
+                            if (flagCondition) {
+                                if (dataItem.currency === '2') {
+                                    unidadCostoConvertidaPO = useConvertions(dataItem, itemMod, unitsValue, false)
+                                    costoUSD += unidadCostoConvertidaPO;
+                                    costoMXN += unidadCostoConvertidaPO * monedaMxn;
+                                    // costoUSD += dataItem.amount;
+                                    // costoMXN += dataItem.amount * monedaMxn;
+                                } else {
+                                    unidadCostoConvertidaPO = useConvertions(dataItem, itemMod, unitsValue, false)
+                                    costoMXN += unidadCostoConvertidaPO;
+                                    costoUSD += unidadCostoConvertidaPO / monedaUsd;
+                                    // costoMXN += dataItem.amount;
+                                    // costoUSD += dataItem.amount * monedaUsd;
+                                }
+                                flagCondition = false
+                            }
                         }
+                        unidadCostoConvertidaPO = 0;
                     })
+                    log.debug({ title: 'Costo sumando Costo mas alto', details: { item: itemMod.idItemComponent, costoUSD: costoUSD, costoMXN: costoMXN } });
+                    var unidadCostoConvertidaLC = 0;
                     //Se asignan los costos de envio
                     dataLC.forEach(dataItem => {
                         if (itemMod.idItemComponent === dataItem.id) {
-                            costo += dataItem.landedCost
+                            let flagCondition = true;
+                            if (flagCondition) {
+                                if (dataItem.currency === '2') {
+                                    unidadCostoConvertidaLC = useConvertions(dataItem, itemMod, unitsValue, false)
+                                    costoUSD += unidadCostoConvertidaLC;
+                                    costoMXN += unidadCostoConvertidaLC * monedaMxn;
+                                    // costoUSD += dataItem.amount;
+                                    // costoMXN += dataItem.amount * monedaMxn;
+                                } else {
+                                    unidadCostoConvertidaLC = useConvertions(dataItem, itemMod, unitsValue, false)
+                                    costoMXN += unidadCostoConvertidaLC;
+                                    costoUSD += unidadCostoConvertidaLC / monedaUsd;
+                                    // costoMXN += dataItem.amount;
+                                    // costoUSD += dataItem.amount * monedaUsd;
+                                }
+                                flagCondition = false
+                            }
                         }
+                        unidadCostoConvertidaLC = 0
                     })
+                    log.debug({ title: 'Costo sumando LC', details: { item: itemMod.idItemComponent, costoUSD: costoUSD, costoMXN: costoMXN } });
                     //Se asignan el agente aduanal y el seguro
+                    var unidadCostoConvertidaBILL = 0;
                     dataBill.forEach(dataItem => {
                         if (itemMod.idItemComponent === dataItem.id) {
-                            costo += dataItem.amount
-                        }
-                    })
-                    dataPO.forEach(dataItem => {
-                        if (itemMod.idItemComponent === dataItem.id) {
-                            arrItemsAux.forEach(itemAux => {
-                                if (itemAux.currency === "1") {
-                                    if (dataItem.currency === "1") {
-                                        costo += dataItem.gasto
-                                    } else {
-                                        costo += dataItem.gasto / parseFloat(monedaUsd);
-                                    }
-                                } else {
-                                    if (dataItem.currency === "2") {
-                                        costo += dataItem.gasto
-                                    } else {
-                                        costo += dataItem.gasto * parseFloat(monedaMxn);
-                                    }
-                                }
-                            })
-                        }
+                            let flagCondition = true;
+                            if (flagCondition) {
 
+                                if (dataItem.currency === '2') {
+                                    unidadCostoConvertidaBILL = useConvertions(dataItem, itemMod, unitsValue, false)
+                                    costoUSD += unidadCostoConvertidaBILL;
+                                    costoMXN += unidadCostoConvertidaBILL * monedaMxn;
+                                    // costoUSD += dataItem.amount;
+                                    // costoMXN += dataItem.amount * monedaMxn;
+                                } else {
+                                    unidadCostoConvertidaBILL = useConvertions(dataItem, itemMod, unitsValue, false);
+                                    costoMXN += unidadCostoConvertidaBILL;
+                                    costoUSD += unidadCostoConvertidaBILL / monedaUsd;
+                                    // costoMXN += dataItem.amount;
+                                    // costoUSD += dataItem.amount * monedaUsd;
+                                }
+                                flagCondition = false
+                            }
+                        }
+                        // log.audit({ title: 'unidadCostoConvertidaBILL', details: unidadCostoConvertidaBILL });
+                        unidadCostoConvertidaBILL = 0
                     })
-                    itemMod.cost = costo;
-                    //log.debug({ title: 'Costo incrementable:', details: costo });
+                    log.debug({ title: 'Costo sumando Bill', details: { item: itemMod.idItemComponent, costoUSD: costoUSD, costoMXN: costoMXN } });
+
+                    // Cada una de las uno de todos los costos es multiplicado por la cantidad requerida dentro de la revision
+                    itemMod.costUSD += (costoUSD) * parseFloat(itemMod.cantidad);
+                    itemMod.costMXN += (costoMXN) * parseFloat(itemMod.cantidad);
+                    // itemMod.costMXN += costoMXN;
                 })
 
+                log.audit({ title: 'arrListComponents ultimo costo:', details: arrListComponents });
                 log.debug({ title: 'averageCostListRev', details: averageCostListRev });
 
-                return [averageCostListRev, arrListComponents];
+                return arrListComponents;
             } catch (error) {
                 log.error({ title: 'getListComponents', details: error });
                 return [];
+            }
+        }
+        function useConvertions(itemCost, componente, unitsValueLocal, imprime) {
+            try {
+                for (keyGen in unitsValueLocal) {
+                    let unidadesPibote = unitsValueLocal[keyGen];
+                    if (unidadesPibote[componente.unit]) {
+                        for (keySub in unidadesPibote) {
+                            let unidadCosto = unidadesPibote[keySub];
+                            // let unidadCosto = Object.values(unidadesPibote).find(item => item.unitNameAbr === itemCost.unitabbreviation)
+
+                            if (unidadCosto.unitNameAbr === itemCost.unitabbreviation) {
+                                // log.debug({ title: 'Unidades del articulo', details: unidadesPibote[componente.unit] });
+                                // log.debug({ title: 'Unidades del costo', details: unidadCosto });
+                                let unidadBase = Object.values(unidadesPibote).find(item => item.unitBase === true)
+                                // log.audit({ title: 'unidadBase', details: unidadBase });
+                                let montoConversion = 0
+                                if (imprime) {
+                                    log.debug({ title: 'Unidades por categoria encontrada:', details: unidadesPibote });
+                                    log.debug({ title: 'Unidades por categoria pibote', details: unidadCosto });
+                                    log.audit({ title: 'Datos de BG', details: { itemCost, componente } });
+                                    log.audit({ title: 'Unidad comparada', details: { compare: componente.unit, keySub } });
+                                }
+                                if (componente.unit === keySub) {
+                                    montoConversion = itemCost.amount;
+                                    if (imprime) {
+                                        log.audit({ title: 'Monto Estatico:', details: montoConversion });
+                                    }
+                                    return montoConversion;
+                                } else {
+                                    let unidadConvertidad = ((unidadesPibote[componente.unit].value * itemCost.amount) / unidadCosto.value);
+                                    montoConversion = unidadConvertidad;
+                                    if (imprime) {
+                                        log.audit({ title: 'Monto Conversion', details: montoConversion });
+                                    }
+                                    return montoConversion;
+                                }
+                            }
+                        }
+                    }
+                }
+                return 0
+            } catch (e) {
+                log.error({ title: 'Error useConvertions:', details: e });
+                return 0
             }
         }
         /**
@@ -730,108 +1026,386 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
         * @param {*} idItemArt
         * Función para traer los promedios por articulo inventariable 
         */
-        function getDataAI(idItemArt) {
+        function getDataII(idItemArt, arrListComponents) {
             try {
-                log.debug({ title: 'idItemArt', details: idItemArt });
-                var arrAjustInventory = [];
-                var date = new Date()
-                var fecha = moment(date).locale('es-mx').format('DD/MM/YYYY').split('/');
-                log.debug({ title: 'Fecha actual: ', details: fecha });
-                date = date.setMonth(date.getMonth() - 12)
-                log.debug({ title: 'date:', details: date });
-                var fechaArreglo = moment(date).locale('es-mx').format('DD/MM/YYYY').split('/');
-                //Modificar por el formato de fechas
-                var fechaInicio = "1/1/" + fechaArreglo[2];
-                var fechaFin = "12/31/" + fecha[2];
-                var inventoryadjustmentSearchObj = search.create({
-                    type: "inventoryadjustment",
+                let arrInventoryItem = [];
+                var itemSearchObj = search.create({
+                    type: "item",
                     filters:
                         [
-                            ["type", "anyof", "InvAdjst"],
-                            "AND",
-                            ["item.internalid", "anyof", idItemArt],
-                            "AND",
-                            ["trandate", "within", fechaInicio, fechaFin]
+                            "internalid", "anyof", idItemArt
                         ],
                     columns:
                         [
-                            // search.createColumn({ name: "itemid", join: "item", summary: "GROUP", label: "Name" }),
-                            search.createColumn({ name: "internalid", join: "item", summary: "GROUP", label: "ID interno" }),
-                            search.createColumn({ name: "amount", summary: "SUM", label: "Amount" }),
-                            search.createColumn({ name: "quantity", summary: "SUM", label: "Quantity" })
+                            search.createColumn({ name: "internalid", summary: "GROUP", label: "Internal ID" }),
+                            search.createColumn({ name: "itemid", summary: "GROUP", sort: search.Sort.ASC, label: "Name" }),
+                            search.createColumn({ name: "locationaveragecost", summary: "MAX", label: "Location Average Cost" }),
+                            search.createColumn({ name: "currency", join: "vendor", summary: "GROUP", label: "Currency" }),
+                            search.createColumn({ name: "baseprice", summary: "MAX", label: "Base Price" }),
+                            search.createColumn({ name: "type", summary: "GROUP", label: "Type" }),
+                            search.createColumn({ name: "averagecost", summary: "AVG", label: "Average Cost" }),
+                            search.createColumn({ name: "custitem_tkio_art_subensasmblaje", summary: "GROUP", label: "Artículo subensamblaje" })
                         ]
                 });
-                var searchResult = inventoryadjustmentSearchObj.runPaged().count;
-                log.debug({ title: 'inventoryadjustmentSearchObj count:', details: searchResult });
-                inventoryadjustmentSearchObj.run().each(function (result) {
-                    var id = result.getValue({ name: "internalid", join: "item", summary: "GROUP" });
-                    var amount = result.getValue({ name: "amount", summary: "SUM" });
-                    var quantity = result.getValue({ name: "quantity", summary: "SUM" });
-                    var averageCost = amount / quantity;
-                    arrAjustInventory.push({
-                        id: id,
-                        averageCost: averageCost
-                    })
-                    return true;
+                var searchResultCount = itemSearchObj.runPaged().count;
+                log.debug("itemSearchObj result count", searchResultCount);
+                // itemSearchObj.run().each(function (result) {
+                var myPagedResults = itemSearchObj.runPaged({
+                    pageSize: 1000
                 });
-                return arrAjustInventory;
-            } catch (error) {
-                log.error({ title: 'getDataAI', details: error });
-                return [];
+                var thePageRanges = myPagedResults.pageRanges;
+                for (var i in thePageRanges) {
+                    var thepageData = myPagedResults.fetch({
+                        index: thePageRanges[i].index
+                    });
+                    thepageData.data.forEach(function (result) {
+                        var id = result.getValue({ name: "internalid", summary: "GROUP" });
+                        var listPrice = parseFloat(result.getValue({ name: "baseprice", summary: "MAX" })) || 0;
+                        var baseprice = parseFloat(result.getValue({ name: "locationaveragecost", summary: "MAX" })) || 0;
+                        var averageCost = parseFloat(result.getValue({ name: "averagecost", summary: "AVG" })) || 0;
+                        var type = result.getValue({ name: "type", summary: "GROUP" });
+                        var currency = result.getValue({ name: "currency", join: "vendor", summary: "GROUP" }) || '1';
+                        var artiSub = result.getValue({ name: "custitem_tkio_art_subensasmblaje", summary: "GROUP" }) || false;
+                        arrInventoryItem.push({
+                            id: id,
+                            amount: parseFloat(baseprice),
+                            listPrice: listPrice,
+                            currency: currency,
+                            averageCost: averageCost,
+                            type: type,
+                            artiSub: artiSub
+                        })
+                        return true;
+                    });
+                }
+                log.audit({ title: 'arrInventoryItem', details: arrInventoryItem });
+                var itemsIdInv = ''
+                arrListComponents.map(itemsList => {
+                    for (var i = 0; i < arrInventoryItem.length; i++) {
+                        if (itemsList.idItemComponent === arrInventoryItem[i].id) {
+                            itemsIdInv += (arrInventoryItem[i].type.toUpperCase() === "INVTPART" ? itemsList.idItemComponent + ',' : '');
+                            itemsList.listPrice = arrInventoryItem[i].listPrice;
+                            itemsList.vendorpricecurrency = arrInventoryItem[i].currency || '';
+                            itemsList.averageCost = arrInventoryItem[i].averageCost;
+                            itemsList.type = arrInventoryItem[i].type;
+                            itemsList.artiSub = arrInventoryItem[i].artiSub;
+                        }
+                    }
+                });
+                itemsIdInv = itemsIdInv.split(',')
+                itemsIdInv = [... new Set(itemsIdInv)];
+                itemsIdInv = itemsIdInv.filter(id => id !== '');
+                log.audit({ title: 'itemsIdInv ', details: itemsIdInv });
+
+                return itemsIdInv
+            } catch (e) {
+                log.error({ title: 'Error getDataII:', details: e });
             }
         }
         function getLandedCost(idItemArt) {
             try {
-                var arrLandedCost = [];
+                let arrLandedCost = [];
+                let idsLandedCost = [];
+                let arrDataSearch = [];
+
                 var date = new Date()
                 var fecha = moment(date).locale('es-mx').format('DD/MM/YYYY').split('/');
-                log.debug({ title: 'Fecha actual: ', details: fecha });
+                //log.debug({ title: 'Fecha actual: ', details: fecha });
                 date = date.setMonth(date.getMonth() - 12)
-                log.debug({ title: 'date:', details: date });
+                //log.debug({ title: 'date:', details: date });
                 var fechaArreglo = moment(date).locale('es-mx').format('DD/MM/YYYY').split('/');
                 var fechaInicio = "1/1/" + fechaArreglo[2];
                 var fechaFin = "12/31/" + fecha[2];
+                log.audit({
+                    title: "Fecha: ",
+                    details: fechaArreglo
+                })
+                var itemreceiptSearchObj = search.create({
+                    type: "itemreceipt",
+                    filters:
+                        [
+                            // ["item", "anyof", idItemArt],
+                            // "AND",
+                            ["landedcostperline", "is", "F"],
+                            "AND",
+                            ["cogs", "is", "F"],
+                            "AND",
+                            ["taxline", "is", "F"],
+                            "AND",
+                            ["mainline", "is", "F"],
+                            "AND",
+                            ["amount", "greaterthan", "0.00"],
+                            "AND",
+                            ["unit", "noneof", "@NONE@"],
+                            "AND",
+                            ["trandate", "within", fechaInicio, fechaFin],
+                            "AND",
+                            ["custbody_tkio_landed_cost", "isnotempty", ""]
+                        ],
+                    columns:
+                        [
+                            search.createColumn({ name: "internalid", sort: search.Sort.DESC, label: "ID interno" }),
+                            search.createColumn({ name: "item", label: "Item" }),
+                            search.createColumn({ name: "quantityuom", label: "Quantity in Transaction Units" }),
+                            search.createColumn({ name: "currency", label: "Currency" }),
+                            search.createColumn({ name: "formulatext", formula: "{custbody_tkio_landed_cost}", label: "Costo General " }),
+                            search.createColumn({ name: "unitabbreviation", label: "Units" }),
+                            search.createColumn({ name: "unit", label: "Units" }),
+                            search.createColumn({ name: "amount", label: "Amount" })
+                        ],
+                    id: 'customsearch_getlandedcost',
+                    title: 'getList LC 2'
+                });
+
+                // itemreceiptSearchObj.save()
+                var searchResultCount = itemreceiptSearchObj.runPaged().count;
+                log.audit({ title: 'searchResultCount', details: searchResultCount });
+                // itemreceiptSearchObj.run().each(function (result) {
+                var myPagedResults = itemreceiptSearchObj.runPaged({
+                    pageSize: 1000
+                });
+                let columnsName = itemreceiptSearchObj.run().columns;
+                var thePageRanges = myPagedResults.pageRanges;
+                for (var i in thePageRanges) {
+                    var thepageData = myPagedResults.fetch({ index: thePageRanges[i].index });
+                    thepageData.data.forEach(function (result) {
+                        log.audit({ title: 'result', details: result });
+                        let objPib = {};
+                        let objAux = {};
+                        columnsName.forEach(obj => {
+                            if (obj.join) {
+                                if (objAux[obj.join]) {
+                                    objAux[obj.join][obj.name] = {}
+                                } else {
+                                    objAux[obj.join] = {}
+                                    objAux[obj.join][obj.name] = {}
+                                }
+                            } else {
+                                objAux[obj.name] = {}
+                            }
+                        });
+                        objPib = objAux;
+                        for (key in columnsName) {
+                            let values = {}
+                            let text = result.getText(columnsName[key]);
+                            let value = result.getValue(columnsName[key])
+                            if (text) {
+                                values.text = text;
+                                values.value = value;
+                            } else {
+                                values = value;
+                            }
+                            if (columnsName[key].join) {
+                                objPib[columnsName[key].join][columnsName[key].name] = values
+                            } else {
+                                objPib[columnsName[key].name] = values
+                            }
+                        }
+                        arrDataSearch.push(objPib);
+
+                        return true;
+                    });
+                }
+                let arrGrouped = arrDataSearch.reduce((acc, curr) => {
+                    const transactionId = curr.internalid.value;
+
+                    if (!acc[transactionId]) {
+                        acc[transactionId] = [];
+                    }
+                    acc[transactionId].push(curr);
+                    return acc;
+                }, {})
+                log.audit({ title: 'Costos incrementables por LC GENERAL', details: arrGrouped });
+
+                let arrFinalCost = []
+                for (transactionId in arrGrouped) {
+                    let arrInt = arrGrouped[transactionId];
+                    let numLines = arrInt.length;
+                    arrInt.forEach(line => {
+                        arrFinalCost.push({
+                            id: line.item.value,
+                            amount: ((parseFloat(line.formulatext) / numLines) / parseFloat(line.quantityuom)),
+                            currency: line.currency.value,
+                            unit: line.unit,
+                            unitabbreviation: line.unitabbreviation,
+                        });
+                    })
+                }
+                log.audit({ title: 'Costos incrementables por LC GENERAL', details: arrFinalCost });
+                return arrFinalCost;
+            } catch (e) {
+                log.error({ title: 'Error getLandedCost:', details: e });
+                return [];
+            }
+        }
+        function getLandedCostPerLine(idItemArt) {
+            try {
+                let arrLandedCost = [];
+                let idsLandedCost = [];
+                var arrDataSearch = []
+
+                var date = new Date()
+                var fecha = moment(date).locale('es-mx').format('DD/MM/YYYY').split('/');
+                //log.debug({ title: 'Fecha actual: ', details: fecha });
+                date = date.setMonth(date.getMonth() - 12)
+                //log.debug({ title: 'date:', details: date });
+                var fechaArreglo = moment(date).locale('es-mx').format('DD/MM/YYYY').split('/');
+                var fechaInicio = "1/1/" + fechaArreglo[2];
+                var fechaFin = "12/31/" + fecha[2];
+                log.audit({
+                    title: "Fecha: ",
+                    details: fechaArreglo
+                })
                 var itemreceiptSearchObj = search.create({
                     type: "itemreceipt",
                     filters:
                         [
                             ["type", "anyof", "ItemRcpt"],
                             "AND",
-                            // ["item.internalid", "anyof", "19"],
-                            ["item.internalid", "anyof", idItemArt],
+                            ["trandate", "within", fechaInicio, fechaFin],
                             "AND",
-                            ["shippingcost", "isnotempty", ""],
+                            ["anylineitem", "anyof", idItemArt],
                             "AND",
-                            ["trandate", "within", fechaInicio, fechaFin]
+                            ["cogs", "is", "F"],
+                            "AND",
+                            ["taxline", "is", "F"],
+                            "AND",
+                            ["mainline", "is", "F"],
+                            "AND",
+                            ["landedcostperline", "is", "T"],
+                            "AND",
+                            ["amount", "greaterthan", "0.00"]
                         ],
                     columns:
                         [
-                            search.createColumn({ name: "shippingcost", label: "Costo de envío" }),
-                            search.createColumn({ name: "internalid", join: "item", label: "ID interno" })
+                            search.createColumn({ name: "internalid", label: "Internal ID" }),
+                            search.createColumn({ name: "item", label: "Item" }),
+                            search.createColumn({ name: "landedcostperline", label: "Landed Cost per Line" }),
+                            search.createColumn({ name: "fxrate", label: "Item Rate" }),
+                            search.createColumn({ name: "fxamount", label: "Amount (Foreign Currency)" }),
+                            search.createColumn({ name: "amount", label: "Amount" }),
+                            search.createColumn({ name: "formulacurrency", formula: "{amount}/{exchangerate}", label: "Formula (Currency)" }),
+                            search.createColumn({ name: "quantity", label: "Quantity" }),
+                            search.createColumn({ name: "quantityshiprecv", label: "Quantity Fulfilled/Received" }),
+                            search.createColumn({ name: "formulatext", formula: "{landedcostperline}", label: "Formula (Text)" }),
+                            search.createColumn({ name: "unitid", label: "Unit Id" }),
+                            search.createColumn({ name: "unit", label: "Units" }),
+                            search.createColumn({ name: "unitabbreviation", label: "Units" }),
+                            search.createColumn({ name: "quantityuom", label: "Quantity in Transaction Units" }),
+                            search.createColumn({ name: "currency", label: "Currency" })
                         ]
                 });
                 var searchResultCount = itemreceiptSearchObj.runPaged().count;
-                log.debug("Cantidad de costos de envios encontrada: ", searchResultCount);
-                itemreceiptSearchObj.run().each(function (result) {
-                    log.debug({ title: 'ressult landed cost', details: ressult });
-                    var id = result.getValue({ name: "internalid", join: "item" });
-                    var landedCost = result.getValue({ name: 'shippingcost' }) || 0;
-                    arrLandedCost.push({
-                        id: id,
-                        landedCost: landedCost
-                    });
-                    return true;
+                log.debug("itemreceiptSearchObj result count", searchResultCount);
+                var myPagedResults = itemreceiptSearchObj.runPaged({
+                    pageSize: 1000
                 });
-                return arrLandedCost;
+                var thePageRanges = myPagedResults.pageRanges;
+
+                let columnsName = itemreceiptSearchObj.run().columns;
+                for (var i in thePageRanges) {
+                    var thepageData = myPagedResults.fetch({ index: thePageRanges[i].index });
+                    thepageData.data.forEach(function (result) {
+                        // log.audit({ title: 'result', details: result });
+                        let objPib = {};
+                        let objAux = {};
+                        columnsName.forEach(obj => {
+                            if (obj.join) {
+                                if (objAux[obj.join]) {
+                                    objAux[obj.join][obj.name] = {}
+                                } else {
+                                    objAux[obj.join] = {}
+                                    objAux[obj.join][obj.name] = {}
+                                }
+                            } else {
+                                objAux[obj.name] = {}
+                            }
+                        });
+                        objPib = objAux;
+                        for (key in columnsName) {
+                            let values = {}
+                            let text = result.getText(columnsName[key]);
+                            let value = result.getValue(columnsName[key])
+                            if (text) {
+                                values.text = text;
+                                values.value = value;
+                            } else {
+                                values = value;
+                            }
+                            if (columnsName[key].join) {
+                                objPib[columnsName[key].join][columnsName[key].name] = values
+                            } else {
+                                objPib[columnsName[key].name] = values
+                            }
+                        }
+                        if (idItemArt.includes(objPib.item.value)) {
+                            arrDataSearch.push(objPib);
+                        }
+                        return true;
+                    });
+
+                }
+                log.audit({ title: 'arrDataSearch', details: arrDataSearch });
+                let arrGrouped = arrDataSearch.reduce((acc, curr) => {
+                    const { item, internalid } = curr;
+
+                    const transactionId = internalid.value
+                    const itemId = item.value
+
+                    if (!acc[transactionId]) {
+                        acc[transactionId] = {};
+                    }
+                    if (!acc[transactionId][itemId]) {
+                        acc[transactionId][itemId] = [];
+                    }
+                    acc[transactionId][itemId].push(curr);
+                    return acc;
+                }, {})
+                let arrCostLC = [];
+                for (transactionId in arrGrouped) {
+                    let transactionPib = arrGrouped[transactionId];
+                    for (itemId in transactionPib) {
+                        let arrItems = transactionPib[itemId];
+                        let objComp = {
+                            id: '',
+                            fxamount: 0.0,
+                            amount: 0.0,
+                            qty: 0.0,
+                            currency: '',
+                            unit: '',
+                            unitabbreviation: '',
+                        };
+                        arrItems.forEach(lines => {
+                            if (lines.fxrate === '') {
+                                objComp.id = lines.item.value;
+                                objComp.fxamount = parseFloat(lines.fxamount)
+                            } else {
+                                objComp.qty = parseFloat(lines.quantityuom)
+                                objComp.currency = lines.currency.value;
+                                objComp.unit = lines.unit;
+                                objComp.unitabbreviation = lines.unitabbreviation;
+                            }
+                        })
+                        objComp.amount = objComp.fxamount / objComp.qty
+                        arrCostLC.push(objComp)
+                    }
+                }
+                log.audit({ title: 'arrGrouped', details: arrGrouped["995"] });
+                log.audit({ title: 'arrCostLC', details: arrCostLC });
+                return arrCostLC;
             } catch (e) {
-                log.error({ title: 'Error getLandedCost:', details: e });
+                log.error({ title: 'Error getLandedCostPerLine:', details: e });
                 return [];
             }
         }
-        function getDataBill(idItemArt) {
+        function getDataBill(itemids) {
             try {
-                log.debug({ title: 'idItemArt', details: idItemArt });
+                let idItemArt = itemids.filter(item => item !== '');
+
+                log.audit({ title: 'idItemArt', details: idItemArt });
                 let arrDataBill = [];
+                let idsBill = [];
+                //var fechaOri = getDateTransaction();
                 var date = new Date()
                 var fecha = moment(date).locale('es-mx').format('DD/MM/YYYY').split('/');
                 //log.debug({ title: 'Fecha actual: ', details: fecha });
@@ -844,15 +1418,11 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
                     type: "vendorbill",
                     filters:
                         [
-                            ["type", "anyof", "VendBill"],
-                            "AND",
-                            ["mainline", "is", "F"],
-                            "AND",
-                            [["expensecategory", "anyof", "184", "91", "277", "200", "14", "107", "249", "63", "156"],
-                                "OR",
-                            ["item.internalid", "anyof", idItemArt]],
-                            "AND",
-                            ["trandate", "within", fechaInicio, fechaFin]
+                            [["type", "anyof", "VendBill"], "AND",
+                            ["mainline", "is", "F"], "AND",
+                            [["expensecategory", "anyof", "184", "91", "277", "200", "14", "107", "249", "63", "156"], "OR",
+                            ["anylineitem", "anyof", idItemArt]], "AND",
+                            ["trandate", "within", fechaInicio, fechaFin]]
                         ],
                     columns:
                         [
@@ -861,98 +1431,121 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
                             search.createColumn({ name: "internalid", join: "item", label: "ID interno" }),
                             search.createColumn({ name: "amount", label: "Importe" }),
                             search.createColumn({ name: "expensecategory", label: "Categoría de gastos" }),
-                            search.createColumn({ name: "internalid", join: "expenseCategory", label: "ID interno" })
+                            search.createColumn({ name: "internalid", join: "expenseCategory", label: "ID interno" }),
+                            search.createColumn({ name: "currency", label: "Currency" }),
+                            search.createColumn({ name: "quantity", label: "Quantity" }),
+                            search.createColumn({ name: "formulanumeric", formula: "ROUND({fxamount}, 4)", label: "Formula (Numeric)" }),
+                            search.createColumn({ name: "unit", label: "Units" }),
+                            search.createColumn({ name: "unitabbreviation", label: "Units" }),
+                            search.createColumn({ name: "quantityuom", label: "Quantity in Transaction Units" })
                         ]
                 });
                 var searchResultCount = vendorbillSearchObj.runPaged().count;
-                //log.debug("GetDataBill Count: ", searchResultCount);
                 var objAux = {
                     idBill: '',
                     lines: []
                 }
-                var cont = 0;
-                vendorbillSearchObj.run().each(function (result) {
-                    cont++;
-                    log.debug({ title: 'result', details: result });
-                    var idBill = result.getValue({ name: 'internalid' });
-                    var amount = result.getValue({ name: 'amount' });
-                    var category = result.getValue({ name: 'internalid', join: 'expensecategory' });
-                    var idItem = result.getValue({ name: "internalid", join: "item" });
-                    log.debug({ title: 'idItem', details: idItem });
-                    //Condicionales de cambio
-                    //1 para cuando comienza y esta vacio, 2 para cuando no cambia, 3 para cuando cambia el id de la factura
-                    var change = (objAux.idBill === '' ? true : (objAux.idBill === idBill ? true : false));
-                    //Seteo de datos auxiliares para el agrupamiento por factura
-
-                    if (change === true) {
-                        var cat = (idItem ? false : true);
-                        var id = (idItem ? idItem : category);
-                        objAux.idBill = (objAux.idBill === '' ? idBill : (objAux.idBill === idBill ? objAux.idBill : idBill));
-                        objAux.lines.push({
-                            id: id,
-                            cat: cat,
-                            amount: amount
-                        })
-
-                    } else if (change === false) {
-                        //log.debug({title: 'objAux', details: objAux});
-                        arrDataBill.push(objAux);
-                        objAux = {
-                            idBill: '',
-                            lines: []
-                        };
-                        var cat = (idItem ? false : true);
-                        var id = (idItem ? idItem : category);
-                        objAux.idBill = (objAux.idBill === '' ? idBill : (objAux.idBill === idBill ? objAux.idBill : idBill));
-                        objAux.lines.push({
-                            id: id,
-                            cat: cat,
-                            amount: amount
-                        })
-                    }
-
-                    if (searchResultCount === cont) {
-                        if (change === false) {
-                            var cat = (idItem ? false : true);
-                            var id = (idItem ? idItem : category);
-                            objAux.idBill = (objAux.idBill === '' ? idBill : (objAux.idBill === idBill ? objAux.idBill : idBill));
-                            objAux.lines.push({
-                                id: id,
-                                cat: cat,
-                                amount: amount
-                            })
-                        }
-                        arrDataBill.push(objAux);
-                    }
-                    return true;
+                // vendorbillSearchObj.run().each(function (result) {
+                var myPagedResults = vendorbillSearchObj.runPaged({
+                    pageSize: 1000
                 });
-                log.debug({ title: 'cont', details: { cont: cont, searchResultCount: searchResultCount } });
-                log.debug({ title: 'arrDataBill', details: arrDataBill });
-                //Se agrupan los costos incrementables por articulo
-                let arrDataBills = []
-                arrDataBill.forEach(bill => {
-                    var arr = bill.lines;
-                    if (arr.length > 1) {
-                        var arrLine = [];
-                        var idItem = '';
-                        var amount = 0.0;
-                        arr.forEach(line => {
-                            log.debug({ title: 'line', details: line });
-                            if (line.cat) {
-                                //arrLine.push(line)
-                                amount += parseFloat(line.amount)
-                            } else {
-                                idItem = line.id
-                            }
-                        })
-                        arrDataBills.push({
-                            id: idItem,
-                            amount: amount
+                var thePageRanges = myPagedResults.pageRanges;
+                for (var i in thePageRanges) {
+                    var thepageData = myPagedResults.fetch({
+                        index: thePageRanges[i].index
+                    });
+                    thepageData.data.forEach(function (result) {
+                        //log.debug({ title: 'result', details: result });
+                        var idBill = result.getValue({ name: 'internalid' });
+                        var amount = result.getValue({ name: "formulanumeric", formula: "ROUND({fxamount}, 4)" });
+                        var category = result.getValue({ name: 'internalid', join: 'expensecategory' });
+                        var idItem = result.getValue({ name: "internalid", join: "item" });
+                        var currency = result.getValue({ name: "currency" });
+                        var quantity = Math.abs(parseFloat(result.getValue({ name: "quantityuom" })));
+                        var unit = result.getValue({ name: "unit" });
+                        var unitabbreviation = result.getValue({ name: "unitabbreviation" });
+                        var cat = (idItem ? false : (category ? true : false));
+                        var id = (idItem ? idItem : category)
+                        idsBill.push(idBill);
+                        arrDataBill.push({
+                            idBill: idBill,
+                            id: id,
+                            cat: cat,
+                            amount: amount,
+                            currency: currency,
+                            quantity: quantity,
+                            unit: unit,
+                            unitabbreviation: unitabbreviation
+                        });
+                        return true;
+                    });
+                }
+
+                let bills = [];
+                let idsBillNew = [... new Set(idsBill.map(n => n))];
+                //log.audit({ title: 'idsBillNew', details: idsBillNew });
+                idsBillNew.forEach(bill => {
+                    bills.push({
+                        id: bill,
+                        costos: []
+                    });
+                });
+
+                bills.map(bill => {
+                    arrDataBill.forEach(trd => {
+                        if (bill.id === trd.idBill && (trd.cat === true || idItemArt.includes(trd.id))) {
+                            bill.costos.push(trd)
+                        }
+                    })
+                });
+                log.debug({ title: 'bills', details: bills });
+
+                let arrItemsBill = [];
+                bills.forEach(bill => {
+                    var costos = bill.costos;
+                    var insert = false;
+                    var exist_gasto = false;
+                    var amount = 0;
+                    var contLines = 0;
+                    var ids = [];
+                    costos.forEach(item => {
+                        if (item.cat) {
+                            amount += parseFloat(item.amount);
+                            exist_gasto = true;
+                        } else {
+                            contLines += 1;
+                            ids.push({
+                                id: item.id,
+                                quantity: item.quantity,
+                                currency: item.currency,
+                                unit: item.unit,
+                                unitabbreviation: item.unitabbreviation,
+                            });
+                            insert = true;
+                        }
+                    });
+                    if (insert && exist_gasto) {
+                        // arrItemsBill.push({
+                        //     ids: ids,
+                        //     amount:amount
+                        // });
+                        ids.forEach(item => {
+                            arrItemsBill.push({
+                                id: item.id,
+                                amount: ((amount / contLines) / item.quantity),
+                                currency: item.currency,
+                                unit: item.unit,
+                                unitabbreviation: item.unitabbreviation,
+                            });
                         })
                     }
+                    contLines = 0;
                 })
+                //En caso de que una factura tenga mas articulos de una misma lista de revision
+                //¿Se hace un promedio del costo de los ariculos que esten dentro de la factura? o ¿se coloca el valor completo del costo de la factura?
+                log.debug({ title: 'Agrupacion de gasto por item', details: arrItemsBill });
 
-                return arrDataBills;
+                return arrItemsBill;
             } catch (e) {
                 log.error({ title: 'Error getDatBill:', details: e });
                 return [];
@@ -963,15 +1556,15 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
         * 
         * Función para traer los gastos por articulo inventariable 
         */
-        function getDataPO(idItemArt, arrListComponents) {
+        function getDataPO(idItemArt, arrListComponents, monedaMxn, monedaUsd) {
             try {
                 let dataPOforItem = [];
                 let idOpList = [];
                 var date = new Date()
                 var fecha = moment(date).locale('es-mx').format('DD/MM/YYYY').split('/');
-                log.debug({ title: 'Fecha actual: ', details: fecha });
+                //log.debug({ title: 'Fecha actual: ', details: fecha });
                 date = date.setMonth(date.getMonth() - 12)
-                log.debug({ title: 'date:', details: date });
+                //log.debug({ title: 'date:', details: date });
                 var fechaArreglo = moment(date).locale('es-mx').format('DD/MM/YYYY').split('/');
                 var fechaInicio = "1/1/" + fechaArreglo[2];
                 var fechaFin = "12/31/" + fecha[2];
@@ -1001,45 +1594,68 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
                         ],
                     columns:
                         [
-                            search.createColumn({ name: "formulanumeric", formula: "{amount}+ABS({taxamount})", label: "Fórmula (numérica)" }),
+                            // search.createColumn({ name: "formulanumeric", formula: "ROUND(({fxamount}+ABS({taxamount}/{exchangerate}))/{quantity},4)", label: "Fórmula (numérica)" }),
+                            search.createColumn({ name: "formulanumeric", formula: "{fxrate}", label: "Fórmula (numérica)" }),
                             search.createColumn({ name: "item", label: "Artículo" }),
                             search.createColumn({ name: "internalid", label: "ID interno" }),
-                            search.createColumn({ name: "currency", label: "Currency" })
+                            search.createColumn({ name: "currency", label: "Currency" }),
+                            search.createColumn({ name: "quantity", label: "Quantity" }),
+                            search.createColumn({ name: "unit", label: "Units" }),
+                            search.createColumn({ name: "unitabbreviation", label: "Units" }),
+                            search.createColumn({ name: "formulanumeric2", formula: "ROUND(({fxamount}/({quantityuom})),4)", label: "Formula (Numeric)" })
                         ]
                 });
                 var idOp = "i";
-                purchaseorderSearchObj.run().each(function (result) {
-                    var id = result.id;
-                    var idItem = result.getValue({ name: "item" });
-                    var gasto = result.getValue({ name: "formulanumeric", formula: "{amount}+ABS({taxamount})" });
-                    var currency = result.getValue({ name: "currency" });
-                    if (idOp === "i") {
-                        idOp = id;
-                        idOpList.push({
-                            id: idOp,
-                            listItemsCost: []
-                        });
-                        // log.audit({title: 'getDATAPO result', details: idOp });
-                    }
-                    if (idOp !== id) {
-                        idOp = id;
-                        idOpList.push({
-                            id: idOp,
-                            gasto: 0,
-                            listItemsCost: []
-                        });
-                        // log.audit({title: 'getDATAPO result', details: idOp });
-                    }
-                    dataPOforItem.push({
-                        id: id,
-                        idItem: idItem,
-                        gasto: gasto,
-                        currency: currency
-                    })
-                    return true;
+                // purchaseorderSearchObj.run().each(function (result) {
+                var myPagedResults = purchaseorderSearchObj.runPaged({
+                    pageSize: 1000
                 });
-                log.audit({ title: 'idOpList', details: idOpList });
-                log.audit({ title: 'dataPOforItem', details: dataPOforItem });
+                var thePageRanges = myPagedResults.pageRanges;
+                for (var i in thePageRanges) {
+                    var thepageData = myPagedResults.fetch({
+                        index: thePageRanges[i].index
+                    });
+                    thepageData.data.forEach(function (result) {
+                        var id = result.id;
+                        var idItem = result.getValue({ name: "item" });
+                        // var gasto = result.getValue({ name: "formulanumeric", formula: "ROUND(({fxamount}+ABS({taxamount}/{exchangerate}))/{quantity},4)" });
+                        // var amount = result.getValue({ name: "formulanumeric", formula: "{fxrate}" });
+                        var amount = result.getValue({ name: "formulanumeric2", formula: "ROUND(({fxamount}/({quantityuom})),4)" });
+                        var currency = result.getValue({ name: "currency" });
+                        var quantity = result.getValue({ name: "quantity" });
+                        var unit = result.getValue({ name: "unit" });
+                        var unitabbreviation = result.getValue({ name: "unitabbreviation" });
+                        if (idOp === "i") {
+                            idOp = id;
+                            idOpList.push({
+                                id: idOp,
+                                amount: 0,
+                                listItemsCost: []
+                            });
+                            // log.audit({title: 'getDATAPO result', details: idOp });
+                        }
+                        if (idOp !== id) {
+                            idOp = id;
+                            idOpList.push({
+                                id: idOp,
+                                amount: 0,
+                                listItemsCost: []
+                            });
+                            // log.audit({title: 'getDATAPO result', details: idOp });
+                        }
+                        dataPOforItem.push({
+                            id: id,
+                            idItem: idItem,
+                            amount: amount,
+                            currency: currency,
+                            unit: unit,
+                            unitabbreviation: unitabbreviation,
+                        })
+                        return true;
+                    });
+                }
+                //log.audit({ title: 'idOpList', details: idOpList });
+                //log.audit({ title: 'dataPOforItem', details: dataPOforItem });
                 //idOpList  -> Servira para rellenar de ordenes de venta con cada uno de sus gastos incluyendo el del articulo inventariable a buscar
 
                 //Se agrupa por orden de compra para hacer un filtro por articulo
@@ -1050,7 +1666,10 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
                                 if (idItemArt[i] === itemsPO.idItem || itemsPO.idItem === '') {
                                     op.listItemsCost.push({
                                         id: itemsPO.idItem || '',
-                                        gasto: itemsPO.gasto || ''
+                                        amount: parseFloat(itemsPO.amount) || 0,
+                                        currency: itemsPO.currency,
+                                        unit: itemsPO.unit,
+                                        unitabbreviation: itemsPO.unitabbreviation,
                                     });
                                     break;
                                 }
@@ -1058,35 +1677,114 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
                         }
                     });
                 });
-
-                log.audit({ title: 'arrListComponents: ', details: arrListComponents });
-                arrListComponents.map(item => {
-                    var costItem = 0.0;
-                    idOpList.forEach(po => {
-                        var costItemPO = 0.0;
-                        var bandera = false;
-                        po.listItemsCost.forEach(cost => {
-                            if (cost.id === '') {
-                                costItemPO += parseFloat(cost.gasto);
-                                // log.audit({title: 'costItemPO', details: {id:cost.id, costo:costItemPO}});
-                            }
-                            if (cost.id === item.idItemComponent) {
-                                bandera = true;
-                            }
-                        });
-                        // log.audit({title: 'costItem', details: costItem});
-                        if (bandera) {
-                            costItem += costItemPO;
-                        }
-                    });
-                    item.cost = costItem;
+                log.audit({ title: 'idOpList mapeo', details: idOpList });
+                // log.audit({ title: 'arrListComponents: ', details: arrListComponents });
+                let arrDataOp = []
+                idOpList.forEach(op => {
+                    let lista = op.listItemsCost
+                    lista.forEach(artOp => {
+                        arrDataOp.push(artOp);
+                    })
                 });
-                // log.audit({title: 'arrListComponents', details: arrListComponents});
-                // log.audit({ title: 'idOpList', details: idOpList });
-                return dataPOforItem;
+                log.audit({ title: 'arrDataOp', details: arrDataOp });
+                /*let arrDataOpDef = [];
+                var contadorOrdenes = 0;
+                arrDataOp.map(actOp => {
+                    var actual = actOp;
+                    if (contadorOrdenes !== 0) {
+                        var validacion = true
+                        arrDataOpDef.map(actOpAux => {
+                            if (actOpAux.id === actual.id) {
+                                validacion = false;
+                            }
+                        })
+                        arrDataOpDef.map(actOpAux => {
+                            // log.audit({ title: 'arrDataOpDef', details: arrDataOpDef });
+                            if (actOpAux.id !== actual.id && actual.id !== '' && validacion) {
+                                arrDataOpDef.push(actual)
+                                validacion = false
+                            } else {
+                                if (actOpAux.id === actual.id && actual.amount > actOpAux.amount) {
+                                    actOpAux.amount = actual.amount;
+                                }
+                            }
+                        })
+                    } else {
+                        if (actual.id !== '') {
+                            arrDataOpDef.push(actual)
+                            contadorOrdenes++;
+                        }
+                    }
+                })
+                log.audit({ title: 'arrDataOpDef', details: arrDataOpDef });*/
+                // return arrDataOpDef;
+                return arrDataOp;
             } catch (error) {
                 log.error({ title: 'getDataPO', details: error });
                 return [];
+            }
+        }
+        function getDatoMasAlto(datos, trd) {
+            try {
+                let arrDataOpDef = [];
+                var contador = 0;
+                datos.map(actOp => {
+                    var actual = actOp;
+                    if (contador !== 0) {
+                        var validacion = true
+                        arrDataOpDef.map(actOpAux => {
+                            if (actOpAux.id === actual.id) {
+                                validacion = false;
+                            }
+                        })
+                        arrDataOpDef.map(actOpAux => {
+                            if (actOpAux.id !== actual.id && actual.id !== '' && validacion) {
+                                arrDataOpDef.push(actual)
+                                validacion = false
+                            } else {
+                                if (actOpAux.id === actual.id && actual.amount > actOpAux.amount) {
+                                    actOpAux.amount = actual.amount;
+                                    actOpAux.currency = actual.currency;
+                                }
+                            }
+                        })
+                    } else {
+                        if (actual.id !== '') {
+                            arrDataOpDef.push(actual)
+                            contador++;
+                        }
+                    }
+                })
+                log.audit({ title: 'datos of ' + trd + ': ', details: arrDataOpDef });
+                return arrDataOpDef;
+            } catch (e) {
+                log.error({ title: 'Error getDatoMasAlto:', details: e });
+            }
+        }
+        function getDateTransaction() {
+            try {
+                var companyinformationObj = config.load({ type: config.Type.COMPANY_PREFERENCES });
+                log.audit({ title: 'companyinformationObj', details: companyinformationObj });
+                var dateFormat = companyinformationObj.getValue({ fieldId: 'DATEFORMAT' })
+                log.audit({ title: 'dateFormat', details: dateFormat });
+                /*
+                    var preferencias = config.load({
+                        type: config.Type.USER_PREFERENCES
+                    });
+                    log.audit({ title: 'type', details: typeof preferencias });
+                    log.audit({ title: 'preferencias', details: preferencias });
+                    var dateFormat= preferencias.getValue({fieldId: 'DATEFORMAT' })
+                    log.audit({ title: 'preferencias', details: dateFormat });
+                */
+                var date = new Date()
+                var fechaI = moment(date).format(dateFormat).split('/');
+                var fechaF = date.setMonth(date.getMonth() - 12)
+                var fechaArreglo = moment(fechaF).format(dateFormat).split('/');
+                var fechaInicio = "1/1/" + fechaArreglo[2];
+                var fechaFin = "12/31/" + fechaI[2];
+                log.audit({ title: 'fecha', details: { fechaIni: fechaInicio, fechaFin: fechaFin } });
+            } catch (e) {
+                log.error({ title: 'Error getDateTransaction:', details: e });
             }
         }
         /**
@@ -1095,7 +1793,6 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
          * @returns arrItemsMXNAux, arrItemsUSDAux
          * funcion para buscar, agrupar y calcular los datos para los campos de la tabla.
          */
-
         function searchItems(params) {
             try {
                 var periodoBuscar = params.periodo;
@@ -1106,52 +1803,64 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
                 // log.audit({ title: 'claseBuscar', details: claseBuscar });
                 var arrItemsMXNAux = searchItemsEnsamble(claseBuscar, periodoBuscar, cambioMXN, cambioUSD);
                 log.audit({ title: 'itemsEnsamblaje', details: arrItemsMXNAux });
+                log.audit({ title: 'No. items assemble:', details: arrItemsMXNAux.length });
+
                 var arrItemsUSDAux = [];
                 arrItemsMXNAux.forEach(idItem => {
                     //log.debug({ title: 'idItem', details: idItem.materialList });
                     //  if(Number(idItem.pieces) !== 0){
-                    var objAux = {
-                        id: idItem.id,
-                        itemCode: idItem.itemCode,
-                        listPrice: Number(idItem.listPrice).toFixed(3),
-                        listPriceOr: Number(idItem.listPrice).toFixed(3),
-                        pieces: idItem.pieces,
-                        lastCost: Number(idItem.lastCost).toFixed(3),
-                        saleCost: Number(idItem.saleCost).toFixed(3),
-                        currencyItem: Number(idItem.currencyItem).toFixed(3),
-                        averageCost: Number(idItem.averageCost).toFixed(3),
-                        min_margin: Number(idItem.min_margin).toFixed(3),
-                        max_margin: Number(idItem.max_margin).toFixed(3),
-                        real_margin: Number(idItem.real_margin).toFixed(3),
-                        theoretical_margin: Number(idItem.theoretical_margin).toFixed(3),
-                        inc_suggest: Number(idItem.inc_suggest).toFixed(3)
+                    // if (!idItem.artiSub) {
+                    if (Number(idItem.theoretical_margin).toFixed(3) > 0 && !idItem.artiSub) {
+                    // if (!idItem.artiSub) {
+                        var objAux = assignObjAux(idItem);
+                        log.debug({ title: 'Moneda', details: idItem.currencyItem });
+                        log.debug({ title: 'Tipo', details: typeof idItem.currencyItem });
+                        if (idItem.currencyItem === "1") {
+                            arrItemsMx.push(objAux)
+                            // var objAux2 = assignObjAux(idItem);
+                            // objAux2.listPrice = (objAux2.listPrice / cambioUSD).toFixed(3)
+                            // objAux2.listPriceOr = (objAux2.listPriceOr / cambioUSD).toFixed(3)
+                            // objAux2.lastCost = (objAux2.lastCost / cambioUSD).toFixed(3)
+                            // objAux2.saleCost = (objAux2.saleCost / cambioUSD).toFixed(3)
+                            // objAux2.currencyItem = (objAux2.currencyItem / cambioUSD).toFixed(3)
+                            // objAux2.averageCost = (objAux2.averageCost / cambioUSD).toFixed(3)
+                            // objAux2.inc_suggest = (objAux2.inc_suggest / cambioUSD).toFixed(3)
+                            // arrItemsUSDAux.push(objAux2)
+                        }
+                        if (idItem.currencyItem === "2") {
+                            arrItemsUSDAux.push(objAux)
+                            // var objAux2 = assignObjAux(idItem);
+                            // objAux2.listPrice = (objAux2.listPrice * cambioMXN).toFixed(3)
+                            // objAux2.listPriceOr = (objAux2.listPriceOr * cambioMXN).toFixed(3)
+                            // objAux2.lastCost = (objAux2.lastCost * cambioMXN).toFixed(3)
+                            // objAux2.saleCost = (objAux2.saleCost * cambioMXN).toFixed(3)
+                            // objAux2.currencyItem = (objAux2.currencyItem * cambioMXN).toFixed(3)
+                            // objAux2.averageCost = (objAux2.averageCost * cambioMXN).toFixed(3)
+                            // objAux2.inc_suggest = (objAux2.inc_suggest * cambioMXN).toFixed(3)
+                            // arrItemsMx.push(objAux2)
+                        }
+                        /*arrItemsMx.push({
+                            id: idItem.id,
+                            itemCode: idItem.itemCode,
+                            listPrice: Number((idItem.listPrice)),
+                            listPriceOr: Number((idItem.listPrice)),
+                            pieces: idItem.pieces,
+                            lastCost: Number((idItem.lastCost)),
+                            saleCost: Number((idItem.saleCost)),
+                            currencyItem: idItem.currencyItem,
+                            averageCost: Number((idItem.averageCost)),
+                            min_margin: idItem.min_margin,
+                            max_margin: idItem.max_margin,
+                            real_margin: idItem.real_margin,
+                            theoretical_margin: idItem.theoretical_margin,
+                            inc_suggest: idItem.inc_suggest
+                        })*/
+                        // }
                     }
-                    if (idItem.currencyItem === "1") {
-                        arrItemsMx.push(objAux)
-                    }
-                    if (idItem.currencyItem == "2") {
-                        arrItemsUSDAux.push(objAux)
-                    }
-                    /*arrItemsMx.push({
-                        id: idItem.id,
-                        itemCode: idItem.itemCode,
-                        listPrice: Number((idItem.listPrice)),
-                        listPriceOr: Number((idItem.listPrice)),
-                        pieces: idItem.pieces,
-                        lastCost: Number((idItem.lastCost)),
-                        saleCost: Number((idItem.saleCost)),
-                        currencyItem: idItem.currencyItem,
-                        averageCost: Number((idItem.averageCost)),
-                        min_margin: idItem.min_margin,
-                        max_margin: idItem.max_margin,
-                        real_margin: idItem.real_margin,
-                        theoretical_margin: idItem.theoretical_margin,
-                        inc_suggest: idItem.inc_suggest
-                    })*/
-                    // }
                 })
 
                 itemsFiltrar = [arrItemsMx, arrItemsUSDAux];
+                log.debug({ title: 'itemsFiltrar', details: itemsFiltrar });
                 return [arrItemsMx, arrItemsUSDAux];
 
             } catch (e) {
@@ -1159,11 +1868,40 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
                 return [];
             }
         }
+        function assignObjAux(idItem) {
+            try {
+                return {
+                    id: idItem.id,
+                    itemCode: idItem.itemCode,
+                    listPrice: Number(idItem.listPrice).toFixed(3),
+                    listPriceOr: Number(idItem.listPrice).toFixed(3),
+                    pieces: idItem.pieces,
+                    lastCost: Number(idItem.lastCost).toFixed(3),
+                    saleCost: Number(idItem.saleCost).toFixed(3),
+                    currencyItem: Number(idItem.currencyItem).toFixed(3),
+                    averageCost: Number(idItem.averageCost).toFixed(3),
+                    min_margin: Number(idItem.min_margin).toFixed(3),
+                    max_margin: Number(idItem.max_margin).toFixed(3),
+                    real_margin: Number(idItem.real_margin).toFixed(3),
+                    theoretical_margin: Number(idItem.theoretical_margin).toFixed(3),
+                    inc_suggest: Number(idItem.inc_suggest).toFixed(3)
+                }
+            } catch (e) {
+                log.error({ title: 'Error assemblyitem:', details: e });
+                return {}
+            }
+        }
         function addItemsList(form, itemsListMXN, itemsListUSD) {
             try {
                 // log.audit({ title: 'itemsListMXN', details: itemsListMXN });
                 var sublist = form.getSublist({ id: 'sublist_precios_mxn' });
                 for (var j = 0; j < itemsListMXN.length; j++) {
+                    var output = url.resolveRecord({
+                        recordType: 'assemblyitem',
+                        recordId: itemsListMXN[j].id,
+                        isEditMode: false
+                    });
+
                     //log.audit({ title: 'itemsList id:', details: itemsListMXN[j].id });
                     //log.audit({ title: 'itemsList:', details: itemsListMXN[j] });
                     if (itemsListMXN[j].check) {
@@ -1188,12 +1926,18 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/r
                 var sublist2 = form.getSublist({ id: 'sublist_precios_usd' });
                 log.debug({ title: 'itemListUSD.length', details: itemsListUSD.length });
                 for (var j = 0; j < itemsListUSD.length; j++) {
+                    var output = url.resolveRecord({
+                        recordType: 'assemblyitem',
+                        recordId: itemsListUSD[j].id,
+                        isEditMode: false
+                    });
                     //log.audit({ title: 'itemsList id:', details: itemsListUSD[j].id });
                     //log.audit({ title: 'itemsList USD:', details: itemsListUSD[j] });
                     if (itemsListUSD[j].check) {
                         sublist2.setSublistValue({ id: 'sublist_valid_incrementar_usd', line: j, value: "T" });
                     }
                     sublist2.setSublistValue({ id: 'sublist_id_internal_item_usd', line: j, value: itemsListUSD[j].id });
+                    // sublist2.setSublistValue({ id: 'sublist_id_item_usd', line: j, value: "<a href=" + output + ">" + itemsListUSD[j].itemCode + "</a>" });
                     sublist2.setSublistValue({ id: 'sublist_id_item_usd', line: j, value: itemsListUSD[j].itemCode });
                     sublist2.setSublistValue({ id: 'sublist_list_price_usd', line: j, value: '$' + itemsListUSD[j].listPrice });
                     sublist2.setSublistValue({ id: 'sublist_list_price_or_usd', line: j, value: itemsListUSD[j].listPriceOr });
