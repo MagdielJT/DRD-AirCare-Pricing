@@ -469,7 +469,7 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/c
                             lastCost: 0,
                             saleCost: 0,
                             currencyItem: currencyItem,
-                            averageCost: (averageCost === 0 ? lastpurchaseprice : averageCost),
+                            averageCost: averageCost,
                             min_margin: min_margin,
                             max_margin: max_margin,
                             clase: clase,
@@ -543,8 +543,8 @@ define(['N/log', 'N/search', 'N/ui/serverWidget', 'N/ui/message', 'N/file', 'N/c
                             item.real_margin = ((datos.saleCost - item.averageCost) / datos.saleCost) * 100;
                         }
                     })
-                    var costoPromedio = (item.pieces === 0 ? item.averageCost : item.lastCost / item.pieces);
-                    item.averageCost = (costoPromedio < item.averageCost ? item.averageCost : costoPromedio);
+                    // var costoPromedio = (item.pieces === 0 ? item.averageCost : item.lastCost / item.pieces);
+                    // item.averageCost = (costoPromedio < item.averageCost ? item.averageCost : costoPromedio);
                     item.theoretical_margin = (item.listPrice !== 0 ? Number((((item.listPrice - item.lastCost) / item.listPrice)).toFixed(3)) * 100 : 0);
                     item.inc_suggest = (item.theoretical_margin < item.max_margin ? item.max_margin - item.theoretical_margin : 0)
                 });
